@@ -81,9 +81,34 @@ const state = {
     'solar-raster': false,
     'wind-raster': false,
     'substation-fill': true,
-    'repd-circle': true
+    'repd-solar': true,
+    'repd-wind': true,
+    'repd-battery': true,
+    'repd-hydro': true,
+    'repd-other': true
   }
 };
+
+// REPD tech color palette + tech token mapping (which Technology Type values count as each)
+const REPD_TECHS = [
+  { id: 'repd-solar',   label: 'REPD — Solar',   color: '#f5a623', tokens: ['Solar Photovoltaics'] },
+  { id: 'repd-wind',    label: 'REPD — Wind',    color: '#4a90e2', tokens: ['Wind Onshore', 'Wind Offshore'] },
+  { id: 'repd-battery', label: 'REPD — Battery', color: '#9013fe', tokens: ['Battery'] },
+  { id: 'repd-hydro',   label: 'REPD — Hydro',   color: '#50e3c2', tokens: ['Small Hydro', 'Large Hydro', 'Pumped Storage Hydroelectricity'] },
+  { id: 'repd-other',   label: 'REPD — Other',   color: '#888888', tokens: null } // null = "everything not in the above lists"
+];
+
+// All known REPD layer ids
+const REPD_LAYER_IDS = REPD_TECHS.map((t) => t.id);
+
+function repdTechFilter(tokens) {
+  // tokens === null means "Other" — match anything NOT in the union of all known tokens
+  if (tokens === null) {
+    const allKnown = REPD_TECHS.flatMap((t) => t.tokens || []);
+    return ['!', ['in', ['get', 'Technology Type'], ['literal', allKnown]]];
+  }
+  return ['in', ['get', 'Technology Type'], ['literal', tokens]];
+}
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -260,34 +285,45 @@ function buildStyle(urls) {
         paint: { 'line-color': '#cc4422', 'line-width': 1 }
       },
 
-      {
-        id: 'repd-circle',
+      // REPD — split into 5 per-tech layers for clearer "what's where" reading.
+      // Color BY tech, opacity BY status (Operational solid; in-planning fainter),
+      // size BY capacity. All sourced from the same PMTiles archive (one fetch).
+      ...REPD_TECHS.map((tech) => ({
+        id: tech.id,
         type: 'circle',
         source: 'repd',
         'source-layer': 'repd',
+        filter: repdTechFilter(tech.tokens),
         paint: {
-          'circle-color': [
-            'match',
-            ['get', 'Development Status'],
-            'Operational', '#2ca02c',
-            'Under Construction', '#1f77b4',
-            'Planning Permission Granted', '#ff7f0e',
-            '#888888'
-          ],
+          'circle-color': tech.color,
           'circle-radius': [
-            'interpolate',
-            ['linear'],
+            'interpolate', ['linear'],
             ['coalesce', ['to-number', ['get', 'Installed Capacity (MWelec)']], 1],
-            0, 3,
-            10, 6,
-            50, 10,
-            200, 14
+            0, 3, 10, 6, 50, 10, 200, 14
           ],
-          'circle-stroke-color': '#ffffff',
-          'circle-stroke-width': 1,
-          'circle-opacity': 0.85
+          'circle-stroke-color': [
+            'match', ['get', 'Development Status'],
+            'Operational', '#1a1a1a',
+            'Under Construction', '#ffffff',
+            'Planning Permission Granted', '#fff066',
+            '#bbbbbb'
+          ],
+          'circle-stroke-width': [
+            'match', ['get', 'Development Status'],
+            'Operational', 1.5,
+            'Under Construction', 2,
+            'Planning Permission Granted', 1.5,
+            0.8
+          ],
+          'circle-opacity': [
+            'match', ['get', 'Development Status'],
+            'Operational', 0.95,
+            'Under Construction', 0.85,
+            'Planning Permission Granted', 0.7,
+            0.4
+          ]
         }
-      }
+      }))
     ]
   };
 }
@@ -317,8 +353,13 @@ function wireTopbar(map) {
       renderFilterPanel(map);
       if (newMode === 'develop') {
         applyParcelStyling(map);
-        // Clear REPD filter
-        if (map.getLayer('repd-circle')) map.setFilter('repd-circle', null);
+        // Reset each REPD tech layer to its hardcoded tech filter (drop status/capacity refinements).
+        REPD_TECHS.forEach((tech) => {
+          if (map.getLayer(tech.id)) map.setFilter(tech.id, repdTechFilter(tech.tokens));
+          if (map.getLayer(tech.id) && state.layerVis[tech.id]) {
+            map.setLayoutProperty(tech.id, 'visibility', 'visible');
+          }
+        });
       } else {
         applyAcquireFilters(map);
       }
@@ -630,7 +671,7 @@ function buildLayerToggles(map) {
     { id: 'solar-raster', label: 'Solar PVOUT raster', swatch: '#f4c542' },
     { id: 'wind-raster', label: 'Wind speed raster', swatch: '#80b3d3' },
     { id: 'substation-fill', label: 'Substations', swatch: '#ff6633' },
-    { id: 'repd-circle', label: 'REPD sites', swatch: '#2ca02c' }
+    ...REPD_TECHS.map((t) => ({ id: t.id, label: t.label, swatch: t.color }))
   ];
 
   for (const item of items) {
@@ -820,22 +861,38 @@ function scheduleAcquireUpdate(map) {
 }
 
 function applyAcquireFilters(map) {
-  if (!map.getLayer('repd-circle')) return;
   const cfg = state.acquire;
-
-  // Tech: REPD "Technology Type" maps roughly to our chips
-  const techCondition = buildTechMatch(cfg.techs);
   const statusCondition = buildStatusMatch(cfg.statuses);
   const capExpr = ['coalesce', ['to-number', ['get', 'Installed Capacity (MWelec)']], 0];
 
-  const filter = [
-    'all',
-    techCondition,
-    statusCondition,
-    ['>=', capExpr, cfg.capacityMin],
-    ['<=', capExpr, cfg.capacityMax]
-  ];
-  map.setFilter('repd-circle', filter);
+  // Map chip name -> layer id
+  const chipToLayer = {
+    Solar: 'repd-solar',
+    Wind: 'repd-wind',
+    Battery: 'repd-battery',
+    Hydro: 'repd-hydro',
+    Other: 'repd-other'
+  };
+
+  for (const [chip, layerId] of Object.entries(chipToLayer)) {
+    if (!map.getLayer(layerId)) continue;
+
+    // Visibility = legend toggle AND chip selection
+    const chipOn = cfg.techs.has(chip);
+    const legendOn = state.layerVis[layerId] !== false;
+    const visible = chipOn && legendOn;
+    map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+
+    // Filter (only meaningful when visible — but always set so the data is correct)
+    const tech = REPD_TECHS.find((t) => t.id === layerId);
+    map.setFilter(layerId, [
+      'all',
+      repdTechFilter(tech.tokens),
+      statusCondition,
+      ['>=', capExpr, cfg.capacityMin],
+      ['<=', capExpr, cfg.capacityMax]
+    ]);
+  }
 }
 
 function buildTechMatch(techsSet) {
@@ -896,7 +953,7 @@ function buildStatusMatch(statusesSet) {
 // Interactions (click handlers + side panel)
 // ---------------------------------------------------------------------------
 function wireInteractions(map) {
-  ['parcels-fill', 'substation-fill', 'repd-circle'].forEach((layer) => {
+  ['parcels-fill', 'substation-fill', ...REPD_LAYER_IDS].forEach((layer) => {
     map.on('mouseenter', layer, () => {
       map.getCanvas().style.cursor = 'pointer';
     });
@@ -989,36 +1046,39 @@ function wireInteractions(map) {
     });
   });
 
-  map.on('click', 'repd-circle', (e) => {
-    if (!e.features || !e.features.length) return;
-    const f = e.features[0];
-    const p = f.properties || {};
-    const ref = p['Ref ID'] ?? p['Ref Id'] ?? p['Reference'] ?? null;
-    const planningRefRow = ref ? ['Reference', String(ref)] : null;
+  // Bind the same click handler to all 5 tech-split REPD layers
+  REPD_LAYER_IDS.forEach((layerId) => {
+    map.on('click', layerId, (e) => {
+      if (!e.features || !e.features.length) return;
+      const f = e.features[0];
+      const p = f.properties || {};
+      const ref = p['Ref ID'] ?? p['Ref Id'] ?? p['Reference'] ?? null;
+      const planningRefRow = ref ? ['Reference', String(ref)] : null;
 
-    showInfoPanel({
-      title: p['Site Name'] ?? 'REPD Site',
-      sections: [
-        {
-          heading: 'Project',
-          rows: [
-            ['Operator', p['Operator (or Applicant)'] ?? '-'],
-            ['Technology', p['Technology Type'] ?? '-'],
-            ['Status', p['Development Status'] ?? '-']
-          ].filter(Boolean)
-        },
-        {
-          heading: 'Capacity',
-          rows: [['Installed (MWelec)', fmtNumber(p['Installed Capacity (MWelec)'], 2)]]
-        },
-        {
-          heading: 'Planning',
-          rows: [
-            ['Local Authority', p['Planning Authority'] ?? '-'],
-            planningRefRow
-          ].filter(Boolean)
-        }
-      ]
+      showInfoPanel({
+        title: p['Site Name'] ?? 'REPD Site',
+        sections: [
+          {
+            heading: 'Project',
+            rows: [
+              ['Operator', p['Operator (or Applicant)'] ?? '-'],
+              ['Technology', p['Technology Type'] ?? '-'],
+              ['Status', p['Development Status'] ?? '-']
+            ].filter(Boolean)
+          },
+          {
+            heading: 'Capacity',
+            rows: [['Installed (MWelec)', fmtNumber(p['Installed Capacity (MWelec)'], 2)]]
+          },
+          {
+            heading: 'Planning',
+            rows: [
+              ['Local Authority', p['Planning Authority'] ?? '-'],
+              planningRefRow
+            ].filter(Boolean)
+          }
+        ]
+      });
     });
   });
 
