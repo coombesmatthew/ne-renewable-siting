@@ -12,6 +12,8 @@ dependencies = [
     "pyproj",
     "rasterio",
     "fiona",
+    "boto3>=1.43.5",
+    "python-dotenv>=1.2.2",
 ]
 
 [project.optional-dependencies]
