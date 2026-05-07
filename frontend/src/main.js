@@ -76,6 +76,7 @@ const state = {
     'constraint-green-belt': true,
     'constraint-sssi': true,
     'constraint-flood': true,
+    'built-up-areas': true,
     'constraint-listed-building': false,
     'constraint-scheduled-monument': false,
     'solar-raster': false,
@@ -156,6 +157,7 @@ function buildStyle(urls) {
       },
       parcels: { type: 'vector', url: `pmtiles://${urls.tiles.parcels}` },
       substations: { type: 'vector', url: `pmtiles://${urls.tiles.substations}` },
+      built_up_areas: { type: 'vector', url: `pmtiles://${urls.tiles.built_up_areas}` },
       repd: { type: 'vector', url: `pmtiles://${urls.tiles.repd}` },
       constraints: { type: 'vector', url: `pmtiles://${urls.tiles.constraints}` },
       ne_polygon: { type: 'vector', url: `pmtiles://${urls.tiles.ne_polygon}` },
@@ -212,6 +214,24 @@ function buildStyle(urls) {
         source: 'parcels',
         'source-layer': 'parcels',
         paint: { 'line-color': '#4a90e2', 'line-width': 0.5, 'line-opacity': 0.4 }
+      },
+
+      // Built-up areas: visual context layer (urban footprints from ONS BUA 2022).
+      // Rendered as a hatched-grey fill with a darker outline so cities/towns
+      // are recognisable without clobbering parcel suitability colours.
+      {
+        id: 'built-up-areas',
+        type: 'fill',
+        source: 'built_up_areas',
+        'source-layer': 'built_up_areas',
+        paint: { 'fill-color': '#666666', 'fill-opacity': 0.18 }
+      },
+      {
+        id: 'built-up-areas-line',
+        type: 'line',
+        source: 'built_up_areas',
+        'source-layer': 'built_up_areas',
+        paint: { 'line-color': '#444444', 'line-width': 0.6, 'line-opacity': 0.5 }
       },
 
       {
@@ -666,6 +686,7 @@ function buildLayerToggles(map) {
     { id: 'constraint-green-belt', label: 'Green Belt', swatch: '#aacc88' },
     { id: 'constraint-sssi', label: 'SSSI', swatch: '#cc8866' },
     { id: 'constraint-flood', label: 'Flood Zone', swatch: '#5588cc' },
+    { id: 'built-up-areas', label: 'Built-up areas', swatch: '#666666' },
     { id: 'constraint-listed-building', label: 'Listed Buildings', swatch: '#bb6688' },
     { id: 'constraint-scheduled-monument', label: 'Scheduled Monuments', swatch: '#aa6688' },
     { id: 'solar-raster', label: 'Solar PVOUT raster', swatch: '#f4c542' },
@@ -686,6 +707,10 @@ function buildLayerToggles(map) {
         // Also toggle substation-line companion
         if (item.id === 'substation-fill' && map.getLayer('substation-line')) {
           map.setLayoutProperty('substation-line', 'visibility', vis);
+        }
+        // Toggle BUA outline alongside its fill
+        if (item.id === 'built-up-areas' && map.getLayer('built-up-areas-line')) {
+          map.setLayoutProperty('built-up-areas-line', 'visibility', vis);
         }
       }
     });
