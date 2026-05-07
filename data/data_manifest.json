@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-07T15:24:30.081210+00:00",
+  "generated_at": "2026-05-07T15:40:18.771739+00:00",
   "region": "North East England",
   "lad_count": 12,
   "lad_codes": [
@@ -368,6 +368,108 @@
       "output_path": "/Users/matthewcoombes/Documents/fuse-applications/data/processed/npg_headroom.geojson",
       "manifest_path": "/Users/matthewcoombes/Documents/fuse-applications/data/processed/npg_headroom.manifest.json"
     },
+    "parcels": {
+      "name": "INSPIRE Index Polygons (\u22652 ha) \u2014 12 NE England LADs",
+      "source": "HM Land Registry INSPIRE Index Polygons",
+      "license": "OGL 3.0",
+      "last_updated": "2026-Q1 per LA download dates",
+      "feature_count": 33969,
+      "total_area_ha": 1110994.67,
+      "per_lad_breakdown": {
+        "E06000047": {
+          "lad_name": "County Durham",
+          "raw_count": 283078,
+          "kept_count": 12479,
+          "dropped_count": 270599,
+          "total_area_ha": 344360.64
+        },
+        "E06000005": {
+          "lad_name": "Darlington",
+          "raw_count": 52586,
+          "kept_count": 1313,
+          "dropped_count": 51273,
+          "total_area_ha": 22723.7
+        },
+        "E06000001": {
+          "lad_name": "Hartlepool",
+          "raw_count": 42243,
+          "kept_count": 481,
+          "dropped_count": 41762,
+          "total_area_ha": 10038.65
+        },
+        "E06000002": {
+          "lad_name": "Middlesbrough",
+          "raw_count": 58617,
+          "kept_count": 381,
+          "dropped_count": 58236,
+          "total_area_ha": 3658.51
+        },
+        "E06000004": {
+          "lad_name": "Stockton-on-Tees",
+          "raw_count": 92793,
+          "kept_count": 1625,
+          "dropped_count": 91168,
+          "total_area_ha": 24079.16
+        },
+        "E06000003": {
+          "lad_name": "Redcar and Cleveland",
+          "raw_count": 67224,
+          "kept_count": 1137,
+          "dropped_count": 66087,
+          "total_area_ha": 25292.75
+        },
+        "E06000057": {
+          "lad_name": "Northumberland",
+          "raw_count": 172410,
+          "kept_count": 11725,
+          "dropped_count": 160685,
+          "total_area_ha": 626077.13
+        },
+        "E08000037": {
+          "lad_name": "Gateshead",
+          "raw_count": 80388,
+          "kept_count": 1424,
+          "dropped_count": 78964,
+          "total_area_ha": 16200.62
+        },
+        "E08000021": {
+          "lad_name": "Newcastle upon Tyne",
+          "raw_count": 95012,
+          "kept_count": 786,
+          "dropped_count": 94226,
+          "total_area_ha": 9089.85
+        },
+        "E08000022": {
+          "lad_name": "North Tyneside",
+          "raw_count": 82415,
+          "kept_count": 756,
+          "dropped_count": 81659,
+          "total_area_ha": 8824.56
+        },
+        "E08000023": {
+          "lad_name": "South Tyneside",
+          "raw_count": 56899,
+          "kept_count": 621,
+          "dropped_count": 56278,
+          "total_area_ha": 6423.4
+        },
+        "E08000024": {
+          "lad_name": "Sunderland",
+          "raw_count": 110228,
+          "kept_count": 1241,
+          "dropped_count": 108987,
+          "total_area_ha": 14225.71
+        }
+      },
+      "filter_threshold_ha": 2.0,
+      "file_size_bytes": 454176786,
+      "parcels_dropped_below_threshold": 1159924,
+      "geometry_type": "Polygon",
+      "primary_key": "parcel_id",
+      "status": "live",
+      "output_path": "/Users/matthewcoombes/Documents/fuse-applications/data/processed/parcels.geojson",
+      "manifest_path": "/Users/matthewcoombes/Documents/fuse-applications/data/processed/parcels.manifest.json"
+    },
     "repd": {
       "name": "REPD Q1 2026",
       "source_url": "https://assets.publishing.service.gov.uk/media/69fc56908cc72d2f863ea58d/REPD_publication_Q1_2026.csv",
@@ -470,9 +572,9 @@
     }
   },
   "totals": {
-    "live_layers": 14,
+    "live_layers": 15,
     "deferred_layers": 1,
-    "total_features": 27759,
-    "total_size_bytes": 101877549
+    "total_features": 61728,
+    "total_size_bytes": 556054335
   }
 }
