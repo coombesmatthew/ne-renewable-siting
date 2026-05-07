@@ -173,9 +173,15 @@ def _build_substations() -> Path:
         "-o",
         str(out),
         "-Z",
-        "7",
+        "5",
         "-z",
         "14",
+        # Preserve every substation at every zoom (we only have 681 points,
+        # tippecanoe's default density-drop would silently lose most of them
+        # at low zooms — make all of them visible from regional zoom 5+).
+        "-r1",
+        "--no-feature-limit",
+        "--no-tile-size-limit",
         "--no-tile-stats",
         "-L",
         f"substation_catchment:{catchment_src}",
