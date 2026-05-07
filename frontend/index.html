@@ -10,16 +10,68 @@
     <div id="topbar">
       <div class="topbar-title">NE England Renewable Siting &amp; Headroom Map</div>
       <div class="topbar-controls" id="topbar-controls">
-        <span class="placeholder-note">Mode &amp; tech filters &mdash; Wave 7B</span>
+        <div class="segmented" id="mode-toggle" role="tablist" aria-label="Mode">
+          <button type="button" class="seg-btn active" data-mode="develop" role="tab" aria-selected="true">Develop</button>
+          <button type="button" class="seg-btn" data-mode="acquire" role="tab" aria-selected="false">Acquire</button>
+        </div>
+        <div class="segmented" id="tech-toggle" role="tablist" aria-label="Technology">
+          <button type="button" class="seg-btn active" data-tech="solar" role="tab" aria-selected="true">Solar</button>
+          <button type="button" class="seg-btn" data-tech="wind" role="tab" aria-selected="false">Wind</button>
+          <button type="button" class="seg-btn" data-tech="battery" role="tab" aria-selected="false">Battery</button>
+        </div>
+        <button type="button" class="filters-btn" id="filters-btn" aria-controls="filter-panel">
+          <span class="filters-icon" aria-hidden="true"></span>Filters
+        </button>
       </div>
     </div>
 
     <div id="map"></div>
 
+    <aside id="filter-panel" aria-hidden="true">
+      <div class="filter-panel-header">
+        <span class="filter-panel-title" id="filter-panel-title">Develop &middot; Solar</span>
+        <button type="button" id="filter-panel-close" aria-label="Close filters">&times;</button>
+      </div>
+      <div class="filter-panel-body" id="filter-panel-body"></div>
+    </aside>
+
+    <aside id="legend-panel">
+      <div class="legend-section">
+        <div class="legend-heading">Suitability</div>
+        <div class="legend-row"><span class="legend-swatch" style="background:#2ca02c;opacity:0.6"></span>Suitable parcel</div>
+        <div class="legend-row"><span class="legend-swatch" style="background:#cccccc;opacity:0.4"></span>Filtered out</div>
+      </div>
+      <div class="legend-section">
+        <div class="legend-heading">Substations / REPD</div>
+        <div class="legend-row"><span class="legend-swatch" style="background:#ff6633;opacity:0.6"></span>Substation</div>
+        <div class="legend-row"><span class="legend-swatch repd-dot" style="background:#2ca02c"></span>Operational</div>
+        <div class="legend-row"><span class="legend-swatch repd-dot" style="background:#1f77b4"></span>Under Construction</div>
+        <div class="legend-row"><span class="legend-swatch repd-dot" style="background:#ff7f0e"></span>Planning Granted</div>
+      </div>
+      <div class="legend-section">
+        <div class="legend-heading">Constraints</div>
+        <div class="legend-row"><span class="legend-swatch" style="background:#88dd88"></span>AONB</div>
+        <div class="legend-row"><span class="legend-swatch" style="background:#66cc66"></span>National Park</div>
+        <div class="legend-row"><span class="legend-swatch" style="background:#aacc88"></span>Green Belt</div>
+        <div class="legend-row"><span class="legend-swatch" style="background:#cc8866"></span>SSSI</div>
+        <div class="legend-row"><span class="legend-swatch" style="background:#5588cc"></span>Flood Zone</div>
+      </div>
+    </aside>
+
     <aside id="info-panel" aria-hidden="true">
       <button id="info-panel-close" aria-label="Close info panel">&times;</button>
       <div id="info-panel-body"></div>
     </aside>
+
+    <div id="modal-overlay" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-header">
+          <h2 id="modal-title">Methodology</h2>
+          <button type="button" id="modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+      </div>
+    </div>
 
     <footer id="footer">
       <span class="attribution">
