@@ -188,6 +188,71 @@ def _add_substation_distances(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     gdf["dist_substation_any_headroom_m"] = dist_any.round(0)
     sub_names = subs.loc[any_mask, "name"].reset_index(drop=True)
     gdf["nearest_substation_name"] = sub_names.iloc[idx_any].values
+
+    # ----- Tiered cumulative distances by minimum voltage -----
+    # For each voltage threshold T, compute distance to the nearest
+    # *gen-headroom* substation whose pvoltage >= T. Allows the frontend
+    # filter UI to express "I need a 33 kV substation within 5 km" cleanly:
+    # check `dist_genhr_min_33kv_m <= 5000`.
+    pvoltage = subs["pvoltage"].fillna(0)
+    voltage_tiers_kv = [11, 20, 33, 66, 132]
+    for tier in voltage_tiers_kv:
+        tier_mask = (pvoltage >= tier) & gen_mask
+        col = f"dist_genhr_min_{tier}kv_m"
+        if not tier_mask.any():
+            # No substations at this tier or higher — set sentinel large value.
+            gdf[col] = 1e9
+            continue
+        tier_centroids = sub_centroids[tier_mask.values]
+        tier_tree = cKDTree(tier_centroids)
+        dist, _ = tier_tree.query(parcel_centroids, k=1)
+        gdf[col] = dist.round(0)
+
+    return gdf
+
+
+def _add_distance_to_constraint(
+    gdf: gpd.GeoDataFrame, constraint_path: Path, col: str
+) -> gpd.GeoDataFrame:
+    """Compute distance from each parcel to the nearest feature in the constraint layer.
+
+    Uses ``geopandas.sjoin_nearest`` in BNG (EPSG:27700) so distance is in metres.
+    Distance is parcel-boundary-to-constraint-boundary (zero for intersecting).
+    Falls back to a large sentinel when the constraint layer is empty or missing.
+    """
+    if not constraint_path.exists():
+        logger.warning("Constraint %s missing — defaulting %s to NaN", constraint_path, col)
+        gdf[col] = float("nan")
+        return gdf
+
+    cgdf = gpd.read_file(constraint_path, engine="pyogrio")
+    if len(cgdf) == 0:
+        gdf[col] = float("nan")
+        return gdf
+
+    # Explode GeometryCollections (e.g. ogr2ogr-clipped flood zones can produce
+    # GCs that gpd.sjoin_nearest can't handle) and drop any leftover non-area /
+    # non-point geometries.
+    cgdf = cgdf.explode(index_parts=False, ignore_index=True)
+    cgdf = cgdf[cgdf.geometry.geom_type.isin(["Polygon", "MultiPolygon", "Point", "MultiPoint"])]
+    if len(cgdf) == 0:
+        gdf[col] = float("nan")
+        return gdf
+
+    # Project both to BNG so the distance comes out in metres.
+    parcels_bng = gdf[["parcel_id", "geometry"]].to_crs("EPSG:27700")
+    cgdf_bng = cgdf[["geometry"]].to_crs("EPSG:27700")
+
+    joined = gpd.sjoin_nearest(
+        parcels_bng,
+        cgdf_bng,
+        how="left",
+        distance_col="_dist_m",
+    )
+    # A parcel may appear multiple times (multiple equidistant constraint features) —
+    # take the minimum.
+    dist_by_id = joined.groupby("parcel_id")["_dist_m"].min()
+    gdf[col] = gdf["parcel_id"].map(dist_by_id).astype("float64").round(0)
     return gdf
 
 
@@ -284,12 +349,26 @@ def _update_manifest(
         "mean_wind_speed_100m_ms",
         "dist_substation_gen_headroom_m",
         "dist_substation_any_headroom_m",
+        "dist_genhr_min_11kv_m",
+        "dist_genhr_min_20kv_m",
+        "dist_genhr_min_33kv_m",
+        "dist_genhr_min_66kv_m",
+        "dist_genhr_min_132kv_m",
         "nearest_substation_name",
         "intersects_aonb",
         "intersects_national_park",
         "intersects_green_belt",
         "intersects_sssi",
         "intersects_flood",
+        "intersects_listed_building",
+        "intersects_scheduled_monument",
+        "dist_aonb_m",
+        "dist_national_park_m",
+        "dist_green_belt_m",
+        "dist_sssi_m",
+        "dist_flood_m",
+        "dist_listed_building_m",
+        "dist_scheduled_monument_m",
     ]
     payload["summary_stats"] = summary_stats
 
@@ -352,23 +431,40 @@ def attach_parcel_attributes() -> Path:
     gdf = _add_substation_distances(gdf)
     timings["substations"] = time.perf_counter() - t0
 
+    # Constraint specs — for each layer we compute BOTH:
+    #   - intersects_<key>  (boolean: any overlap)
+    #   - dist_<key>_m      (metres to nearest feature; 0 when intersects)
+    # The boolean is kept for click-for-detail panels; the distance is what
+    # the flexible filter UI uses (slider 0..N km gives a buffer-style filter).
     constraint_columns: list[str] = []
+    distance_columns: list[str] = []
     constraint_specs = [
-        ("national-landscape.geojson", "intersects_aonb"),
-        ("national-park.geojson", "intersects_national_park"),
-        ("green-belt.geojson", "intersects_green_belt"),
-        ("site-of-special-scientific-interest.geojson", "intersects_sssi"),
-        ("flood_zones.geojson", "intersects_flood"),
-        # Listed Buildings and Scheduled Monuments are NOT pre-computed here —
-        # those filters are applied live in the browser via Turf.js spatial
-        # joins against the visible constraint layers.
+        ("national-landscape.geojson", "aonb"),
+        ("national-park.geojson", "national_park"),
+        ("green-belt.geojson", "green_belt"),
+        ("site-of-special-scientific-interest.geojson", "sssi"),
+        ("flood_zones.geojson", "flood"),
+        ("listed-building.geojson", "listed_building"),
+        ("scheduled-monument.geojson", "scheduled_monument"),
     ]
 
     t0 = time.perf_counter()
-    for filename, col in constraint_specs:
-        logger.info("Computing %s overlap (%s)", col, filename)
-        gdf = _add_intersect_flag(gdf, CONSTRAINTS_DIR / filename, col)
-        constraint_columns.append(col)
+    for filename, key in constraint_specs:
+        bool_col = f"intersects_{key}"
+        dist_col = f"dist_{key}_m"
+        logger.info("Computing %s overlap + distance (%s)", key, filename)
+        try:
+            gdf = _add_intersect_flag(gdf, CONSTRAINTS_DIR / filename, bool_col)
+        except Exception as e:
+            logger.error("intersect %s failed: %s — defaulting %s to False", key, e, bool_col)
+            gdf[bool_col] = False
+        try:
+            gdf = _add_distance_to_constraint(gdf, CONSTRAINTS_DIR / filename, dist_col)
+        except Exception as e:
+            logger.error("distance %s failed: %s — defaulting %s to NaN", key, e, dist_col)
+            gdf[dist_col] = float("nan")
+        constraint_columns.append(bool_col)
+        distance_columns.append(dist_col)
     timings["constraints"] = time.perf_counter() - t0
 
     # Sanity: enforce bool dtype for the intersects_* columns.

@@ -1,7 +1,6 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Protocol } from 'pmtiles';
-import booleanIntersects from '@turf/boolean-intersects';
 
 // ---------------------------------------------------------------------------
 // PMTiles protocol registration
@@ -19,25 +18,29 @@ const TOTAL_PARCELS = 33969;
 
 // Filter spec — each key maps to a parcel attribute / spatial test.
 // The `enabled` flag is the master toggle for that filter; `value` is the
-// threshold (where applicable). Constraint exclusions have no value.
+// threshold (where applicable). Distance-based constraint filters default to
+// 0 km (= exclude only intersecting); user can dial up for buffer-style.
 const FILTER_DEFAULTS = {
   // Resource thresholds
   minPvout:        { enabled: false, value: 920 },     // kWh/kWp/yr
   minWind:         { enabled: false, value: 7.0 },     // m/s @ 100 m
-  // Grid thresholds (km in UI, metres in data)
-  maxDistGenHr:    { enabled: false, value: 10 },      // km
-  maxDistAnyHr:    { enabled: false, value: 5 },       // km
-  // Parcel area
-  minArea:         { enabled: false, value: 5 },       // ha
-  // Exclusions — parcels intersecting any of these are filtered out.
-  // First five use baked-in attributes; last two use live Turf.js spatial join.
-  excludeAonb:     { enabled: false },
-  excludeNp:       { enabled: false },
-  excludeGb:       { enabled: false },
-  excludeSssi:     { enabled: false },
-  excludeFlood:    { enabled: false },
-  excludeListed:   { enabled: false },   // Turf, viewport-scoped
-  excludeMonument: { enabled: false }    // Turf, viewport-scoped
+  // Grid: distance-to-gen-headroom-substation, with a minimum voltage tier.
+  // Voltage tier picks which precomputed column to filter on (min_11/20/33/66/132 kV).
+  // Default '11' = any voltage (smallest cumulative tier covers everything).
+  maxDistGenHr:    { enabled: false, value: 10, voltage: '11' },  // km, voltage in kV
+  maxDistAnyHr:    { enabled: false, value: 5 },                  // km (no voltage refinement)
+  // Parcel size
+  minArea:         { enabled: false, value: 5 },                  // ha
+  // Constraint distance filters — slider 0..20 km. At 0 km, equivalent to
+  // "exclude parcels that intersect". Above 0, excludes anything within that
+  // many km of the constraint (buffer-style).
+  minDistAonb:     { enabled: false, value: 0 },
+  minDistNp:       { enabled: false, value: 0 },
+  minDistGb:       { enabled: false, value: 0 },
+  minDistSssi:     { enabled: false, value: 0 },
+  minDistFlood:    { enabled: false, value: 0 },
+  minDistListed:   { enabled: false, value: 0 },
+  minDistMonument: { enabled: false, value: 0 }
 };
 
 const ACQUIRE_DEFAULTS = {
@@ -54,10 +57,6 @@ const ACQUIRE_DEFAULTS = {
 const state = {
   mode: 'develop', // 'develop' | 'acquire'
   filters: structuredClone(FILTER_DEFAULTS),
-  // Cached set of parcel_ids excluded by viewport-scoped Turf joins (listed
-  // buildings + scheduled monuments). Recomputed on each map move/zoom or
-  // when those filters toggle. Empty when neither is enabled.
-  liveExcludedParcelIds: new Set(),
   acquire: {
     techs: new Set(ACQUIRE_DEFAULTS.techs),
     statuses: new Set(ACQUIRE_DEFAULTS.statuses),
@@ -445,75 +444,6 @@ function updatePanelTitle() {
   }
 }
 
-// Recompute the parcel-id exclusion set for live (Turf.js) filters. Only
-// runs against features currently rendered in the viewport — that's a
-// trade-off: filters auto-tighten as user zooms in. For the demo, that's a
-// feature, not a bug — at low zoom the user sees broader candidates; at
-// high zoom they see precise exclusions.
-function recomputeLiveExcludedParcelIds(map) {
-  const filters = state.filters;
-  if (!filters.excludeListed.enabled && !filters.excludeMonument.enabled) {
-    state.liveExcludedParcelIds = new Set();
-    return;
-  }
-
-  const constraintLayers = [];
-  if (filters.excludeListed.enabled) constraintLayers.push('constraint-listed-building');
-  if (filters.excludeMonument.enabled) constraintLayers.push('constraint-scheduled-monument');
-
-  // We need the constraint features to be rendered in the visible viewport
-  // for queryRenderedFeatures to find them. Force-show them temporarily if
-  // they're toggled off in the legend — restore visibility after.
-  const restoreVis = {};
-  for (const layer of constraintLayers) {
-    if (!map.getLayer(layer)) continue;
-    const cur = map.getLayoutProperty(layer, 'visibility');
-    if (cur === 'none') {
-      restoreVis[layer] = cur;
-      map.setLayoutProperty(layer, 'visibility', 'visible');
-    }
-  }
-
-  const constraintFeatures = map.queryRenderedFeatures({
-    layers: constraintLayers.filter((l) => map.getLayer(l))
-  });
-
-  const parcelFeatures = map.queryRenderedFeatures({
-    layers: ['parcels-fill']
-  });
-
-  // Restore visibility
-  for (const [layer, vis] of Object.entries(restoreVis)) {
-    map.setLayoutProperty(layer, 'visibility', vis);
-  }
-
-  const excluded = new Set();
-  if (constraintFeatures.length === 0 || parcelFeatures.length === 0) {
-    state.liveExcludedParcelIds = excluded;
-    return;
-  }
-
-  // Brute-force pairwise intersection. At typical zooms the viewport has ~50–500
-  // parcels and ~50–2000 listed buildings (all of NE has 12,432 but most won't
-  // be in any one viewport). Keep it simple — booleanIntersects is fast.
-  for (const parcel of parcelFeatures) {
-    const pid = parcel.properties?.parcel_id;
-    if (!pid || excluded.has(pid)) continue;
-    for (const c of constraintFeatures) {
-      try {
-        if (booleanIntersects(parcel, c)) {
-          excluded.add(pid);
-          break;
-        }
-      } catch (_) {
-        // Geometry edge cases — ignore the pair.
-      }
-    }
-  }
-
-  state.liveExcludedParcelIds = excluded;
-}
-
 // ---------------------------------------------------------------------------
 // Filter panel (renders the contents based on mode + tech)
 // ---------------------------------------------------------------------------
@@ -531,22 +461,35 @@ function renderFilterPanel(map) {
 }
 
 // Filter spec used by both the panel renderer and the expression builder.
-// Each entry knows: how to render itself, which parcel attribute it tests,
-// and how to translate (enabled, value) into a MapLibre filter clause OR
-// a flag for the live (Turf.js) excluder.
+// Each entry: how to render, which parcel attribute it tests, how to translate
+// (enabled, value) into a MapLibre filter clause.
+//
+// `kind: 'slider'` — single threshold slider
+// `kind: 'slider+select'` — slider plus a dropdown (used for grid voltage tier)
+// Distance constraints all use the same min..max range (0..20 km buffer).
 const FILTER_SPECS = [
-  { id: 'minPvout',        section: 'Resource', label: 'Min Solar PVOUT',                unit: 'kWh/kWp/yr', kind: 'slider', min: 800, max: 1000, step: 1,    fmt: (v) => v.toFixed(0) },
-  { id: 'minWind',         section: 'Resource', label: 'Min wind speed @ 100 m',          unit: 'm/s',       kind: 'slider', min: 5,   max: 13,   step: 0.1,  fmt: (v) => v.toFixed(1) },
-  { id: 'maxDistGenHr',    section: 'Grid',     label: 'Max distance to gen-headroom sub', unit: 'km',        kind: 'slider', min: 1,   max: 80,   step: 1,    fmt: (v) => v.toFixed(0) },
-  { id: 'maxDistAnyHr',    section: 'Grid',     label: 'Max distance to any-headroom sub', unit: 'km',        kind: 'slider', min: 1,   max: 50,   step: 1,    fmt: (v) => v.toFixed(0) },
-  { id: 'minArea',         section: 'Other',    label: 'Min parcel area',                  unit: 'ha',        kind: 'slider', min: 2,   max: 100,  step: 1,    fmt: (v) => v.toFixed(0) },
-  { id: 'excludeAonb',     section: 'Constraints (exclude)', label: 'AONB / National Landscape',  kind: 'checkbox', swatch: '#88dd88' },
-  { id: 'excludeNp',       section: 'Constraints (exclude)', label: 'National Park',              kind: 'checkbox', swatch: '#66cc66' },
-  { id: 'excludeGb',       section: 'Constraints (exclude)', label: 'Green Belt',                 kind: 'checkbox', swatch: '#aacc88' },
-  { id: 'excludeSssi',     section: 'Constraints (exclude)', label: 'SSSI',                       kind: 'checkbox', swatch: '#cc8866' },
-  { id: 'excludeFlood',    section: 'Constraints (exclude)', label: 'Flood Zone',                 kind: 'checkbox', swatch: '#5588cc' },
-  { id: 'excludeListed',   section: 'Constraints (exclude)', label: 'Listed Buildings (live)',    kind: 'checkbox', swatch: '#bb6688' },
-  { id: 'excludeMonument', section: 'Constraints (exclude)', label: 'Scheduled Monuments (live)', kind: 'checkbox', swatch: '#aa6688' }
+  { id: 'minPvout',     section: 'Resource',  label: 'Min Solar PVOUT',                  unit: 'kWh/kWp/yr', kind: 'slider', min: 800, max: 1000, step: 1,   fmt: (v) => v.toFixed(0) },
+  { id: 'minWind',      section: 'Resource',  label: 'Min wind speed @ 100 m',           unit: 'm/s',        kind: 'slider', min: 5,   max: 13,   step: 0.1, fmt: (v) => v.toFixed(1) },
+  // Grid — gen-headroom distance with required-voltage tier dropdown.
+  { id: 'maxDistGenHr', section: 'Grid',      label: 'Max dist to gen-headroom sub at min voltage', unit: 'km', kind: 'slider+select', min: 1, max: 80, step: 1, fmt: (v) => v.toFixed(0),
+    selectKey: 'voltage', selectLabel: 'Min voltage',
+    selectOptions: [
+      { value: '11',  label: '≥ 11 kV (any)' },
+      { value: '20',  label: '≥ 20 kV' },
+      { value: '33',  label: '≥ 33 kV (utility-scale)' },
+      { value: '66',  label: '≥ 66 kV (large utility)' },
+      { value: '132', label: '≥ 132 kV (GSP)' }
+    ] },
+  { id: 'maxDistAnyHr', section: 'Grid',      label: 'Max dist to any-headroom sub (battery-style)', unit: 'km', kind: 'slider', min: 1, max: 50, step: 1, fmt: (v) => v.toFixed(0) },
+  { id: 'minArea',      section: 'Other',     label: 'Min parcel area',                  unit: 'ha',         kind: 'slider', min: 2,   max: 100,  step: 1,   fmt: (v) => v.toFixed(0) },
+  // Constraint distance filters — sliders 0..20 km. 0 km = "exclude intersecting".
+  { id: 'minDistAonb',     section: 'Constraints',  label: 'Min distance from AONB',                unit: 'km', kind: 'slider', min: 0, max: 20, step: 0.5, fmt: (v) => v.toFixed(1), swatch: '#88dd88' },
+  { id: 'minDistNp',       section: 'Constraints',  label: 'Min distance from National Park',       unit: 'km', kind: 'slider', min: 0, max: 20, step: 0.5, fmt: (v) => v.toFixed(1), swatch: '#66cc66' },
+  { id: 'minDistGb',       section: 'Constraints',  label: 'Min distance from Green Belt',          unit: 'km', kind: 'slider', min: 0, max: 20, step: 0.5, fmt: (v) => v.toFixed(1), swatch: '#aacc88' },
+  { id: 'minDistSssi',     section: 'Constraints',  label: 'Min distance from SSSI',                unit: 'km', kind: 'slider', min: 0, max: 20, step: 0.5, fmt: (v) => v.toFixed(1), swatch: '#cc8866' },
+  { id: 'minDistFlood',    section: 'Constraints',  label: 'Min distance from Flood Zone',          unit: 'km', kind: 'slider', min: 0, max: 20, step: 0.5, fmt: (v) => v.toFixed(1), swatch: '#5588cc' },
+  { id: 'minDistListed',   section: 'Constraints',  label: 'Min distance from Listed Buildings',    unit: 'km', kind: 'slider', min: 0, max: 20, step: 0.5, fmt: (v) => v.toFixed(1), swatch: '#bb6688' },
+  { id: 'minDistMonument', section: 'Constraints',  label: 'Min distance from Scheduled Monuments', unit: 'km', kind: 'slider', min: 0, max: 20, step: 0.5, fmt: (v) => v.toFixed(1), swatch: '#aa6688' }
 ];
 
 function buildDevelopFilters(map) {
@@ -605,7 +548,7 @@ function buildFilterRow(map, spec) {
   wrap.appendChild(enableLabel);
 
   let valueEl = null;
-  if (spec.kind === 'slider') {
+  if (spec.kind === 'slider' || spec.kind === 'slider+select') {
     const row = document.createElement('div');
     row.className = 'slider-row inline';
     const input = document.createElement('input');
@@ -629,11 +572,38 @@ function buildFilterRow(map, spec) {
     wrap.appendChild(row);
     valueEl = input;
   }
+  // Optional secondary dropdown (used by the gen-hr distance filter for voltage tier)
+  let selectEl = null;
+  if (spec.kind === 'slider+select') {
+    const selRow = document.createElement('div');
+    selRow.className = 'select-row inline';
+    const selLabel = document.createElement('span');
+    selLabel.className = 'sub-label';
+    selLabel.textContent = spec.selectLabel + ': ';
+    const sel = document.createElement('select');
+    sel.disabled = !f.enabled;
+    for (const opt of spec.selectOptions) {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (String(f[spec.selectKey]) === opt.value) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.addEventListener('change', () => {
+      f[spec.selectKey] = sel.value;
+      if (f.enabled) scheduleParcelUpdate(map);
+    });
+    selRow.appendChild(selLabel);
+    selRow.appendChild(sel);
+    wrap.appendChild(selRow);
+    selectEl = sel;
+  }
 
   enableCb.addEventListener('change', () => {
     f.enabled = enableCb.checked;
     wrap.classList.toggle('enabled', f.enabled);
     if (valueEl) valueEl.disabled = !f.enabled;
+    if (selectEl) selectEl.disabled = !f.enabled;
     scheduleParcelUpdate(map);
   });
 
@@ -783,6 +753,65 @@ function buildLayerToggles(map) {
 
   const buildGroup = (title, items, opts = {}) => {
     const sec = section(title, { collapsible: true, collapsed: opts.collapsed ?? false });
+
+    // Master toggle in the section header — flips all items in the group
+    // on/off at once. Reflects mixed/all-on/all-off via tri-state checkbox
+    // (`indeterminate` when items disagree).
+    const heading = sec.querySelector('h4');
+    if (heading) {
+      const masterWrap = document.createElement('span');
+      masterWrap.className = 'group-master';
+      const master = document.createElement('input');
+      master.type = 'checkbox';
+      master.title = `Toggle all ${title.toLowerCase()} layers`;
+      // Stop the click from bubbling to the collapsible-section toggle.
+      master.addEventListener('click', (e) => e.stopPropagation());
+      masterWrap.appendChild(master);
+      heading.appendChild(masterWrap);
+
+      const itemCheckboxes = []; // we'll populate below
+
+      const refreshMasterState = () => {
+        const states = items.map((it) => !!state.layerVis[it.id]);
+        const allOn = states.every(Boolean);
+        const allOff = states.every((s) => !s);
+        master.checked = allOn;
+        master.indeterminate = !allOn && !allOff;
+      };
+
+      master.addEventListener('change', () => {
+        const target = master.checked;
+        for (const item of items) {
+          // Run the same per-item onToggle so companion layers (substation
+          // triple, parcels-line, BUA-line) get flipped too.
+          onToggle(item)(target);
+        }
+        // Sync child checkbox UI states.
+        for (const cb of itemCheckboxes) cb.checked = target;
+        master.indeterminate = false;
+      });
+
+      // After items are appended, wire each child onChange so it bubbles
+      // back into refreshMasterState.
+      for (const item of items) {
+        const row = checkbox({
+          label: item.label,
+          checked: !!state.layerVis[item.id],
+          swatch: item.swatch,
+          onChange: (checked) => {
+            onToggle(item)(checked);
+            refreshMasterState();
+          }
+        });
+        const cb = row.querySelector('input[type="checkbox"]');
+        if (cb) itemCheckboxes.push(cb);
+        sec.appendChild(row);
+      }
+      refreshMasterState();
+      return sec;
+    }
+
+    // Fallback (no heading found — shouldn't happen)
     for (const item of items) {
       sec.appendChild(checkbox({
         label: item.label,
@@ -923,9 +952,15 @@ function buildParcelFilterExpression() {
   if (f.minWind.enabled) {
     conditions.push(['>=', ['coalesce', ['to-number', ['get', 'mean_wind_speed_100m_ms']], 0], f.minWind.value]);
   }
+  // Grid: gen-hr distance filtered against the precomputed cumulative-tier
+  // column for the user-selected min voltage. e.g. "≥33 kV" → uses
+  // dist_genhr_min_33kv_m which is "distance to nearest gen-hr substation
+  // whose pvoltage >= 33".
   if (f.maxDistGenHr.enabled) {
+    const tier = f.maxDistGenHr.voltage || '11';
+    const col = `dist_genhr_min_${tier}kv_m`;
     conditions.push(['<=',
-      ['coalesce', ['to-number', ['get', 'dist_substation_gen_headroom_m']], 1e9],
+      ['coalesce', ['to-number', ['get', col]], 1e9],
       f.maxDistGenHr.value * 1000]);
   }
   if (f.maxDistAnyHr.enabled) {
@@ -937,21 +972,27 @@ function buildParcelFilterExpression() {
     conditions.push(['>=', ['coalesce', ['to-number', ['get', 'area_ha']], 0], f.minArea.value]);
   }
 
-  // Boolean intersect flags — encoded as strings in the tile, so coerce.
-  const flagFalse = (key) => ['!=', ['coalesce', ['to-string', ['get', key]], 'false'], 'true'];
-  if (f.excludeAonb.enabled)  conditions.push(flagFalse('intersects_aonb'));
-  if (f.excludeNp.enabled)    conditions.push(flagFalse('intersects_national_park'));
-  if (f.excludeGb.enabled)    conditions.push(flagFalse('intersects_green_belt'));
-  if (f.excludeSssi.enabled)  conditions.push(flagFalse('intersects_sssi'));
-  if (f.excludeFlood.enabled) conditions.push(flagFalse('intersects_flood'));
-
-  // Live (Turf.js) exclusions — listed buildings + scheduled monuments.
-  // Excluded set is recomputed on map move/zoom or when those filters toggle
-  // (see recomputeLiveExcludedParcelIds + bindMapMoveLive).
-  if ((f.excludeListed.enabled || f.excludeMonument.enabled) && state.liveExcludedParcelIds.size > 0) {
-    conditions.push(['!',
-      ['in', ['coalesce', ['get', 'parcel_id'], ''], ['literal', Array.from(state.liveExcludedParcelIds)]]]);
-  }
+  // Constraint distance filters — slider value is km buffer; baked-in
+  // attribute is metres-distance from parcel boundary to constraint boundary.
+  // At slider=0 km this is "exclude parcels intersecting the constraint"
+  // (since intersecting parcels have dist_X_m == 0, and we test >= which
+  // includes 0 — so we use > to keep 0-distance parcels OUT when buffer > 0,
+  // or use >= 0 = always-true at 0; really we want "dist > buffer_m" for any
+  // non-zero buffer, and "dist > 0" at buffer=0 to exclude exact intersections).
+  const distFilter = (key, km) => {
+    if (km <= 0) {
+      // 0 km buffer = exclude only parcels that strictly intersect (dist == 0)
+      return ['>', ['coalesce', ['to-number', ['get', key]], 1e9], 0];
+    }
+    return ['>=', ['coalesce', ['to-number', ['get', key]], 1e9], km * 1000];
+  };
+  if (f.minDistAonb.enabled)     conditions.push(distFilter('dist_aonb_m', f.minDistAonb.value));
+  if (f.minDistNp.enabled)       conditions.push(distFilter('dist_national_park_m', f.minDistNp.value));
+  if (f.minDistGb.enabled)       conditions.push(distFilter('dist_green_belt_m', f.minDistGb.value));
+  if (f.minDistSssi.enabled)     conditions.push(distFilter('dist_sssi_m', f.minDistSssi.value));
+  if (f.minDistFlood.enabled)    conditions.push(distFilter('dist_flood_m', f.minDistFlood.value));
+  if (f.minDistListed.enabled)   conditions.push(distFilter('dist_listed_building_m', f.minDistListed.value));
+  if (f.minDistMonument.enabled) conditions.push(distFilter('dist_scheduled_monument_m', f.minDistMonument.value));
 
   return conditions;
 }
@@ -985,10 +1026,7 @@ function updateCountBadge(map) {
 let _parcelUpdateTimer = null;
 function scheduleParcelUpdate(map) {
   if (_parcelUpdateTimer) clearTimeout(_parcelUpdateTimer);
-  _parcelUpdateTimer = setTimeout(() => {
-    recomputeLiveExcludedParcelIds(map);
-    applyParcelStyling(map);
-  }, 80);
+  _parcelUpdateTimer = setTimeout(() => applyParcelStyling(map), 80);
 }
 
 function applyParcelStyling(map) {
@@ -1002,18 +1040,14 @@ function applyParcelStyling(map) {
   updateCountBadge(map);
 }
 
-// Recompute live exclusion set + re-apply styling on pan/zoom. Only meaningful
-// when listedBuildings or scheduledMonuments filter is on.
+// Re-apply styling on pan/zoom (also refreshes the count badge which is
+// viewport-scoped — `X match in view` updates as the user navigates).
 function bindMapMoveLive(map) {
   let timer = null;
   map.on('moveend', () => {
     if (state.mode !== 'develop') return;
-    const hasLive = state.filters.excludeListed.enabled || state.filters.excludeMonument.enabled;
     if (timer) clearTimeout(timer);
-    timer = setTimeout(() => {
-      if (hasLive) recomputeLiveExcludedParcelIds(map);
-      applyParcelStyling(map);
-    }, 200);
+    timer = setTimeout(() => applyParcelStyling(map), 200);
   });
 }
 

@@ -678,3 +678,21 @@ body.filter-open .maplibregl-ctrl-bottom-left {
   min-width: 76px;
   text-align: right;
 }
+
+/* Group master toggle in section heading (Risks / Substations / Renewable / Land) */
+.filter-section > h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.group-master {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+}
+.group-master input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: #2c4a66;
+}
