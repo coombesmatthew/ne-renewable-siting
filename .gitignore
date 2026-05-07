@@ -24,6 +24,8 @@ data/processed/
 data/pmtiles/
 !data/ne_england.geojson
 !data/data_manifest.json
+!data/processed/
+!data/processed/la_boundaries.geojson
 
 # OS
 .DS_Store

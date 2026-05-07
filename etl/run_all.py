@@ -38,6 +38,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.subcommand == "polygon":
+        from etl.ne_polygon import build_ne_polygon
+
+        out_path = build_ne_polygon()
+        logger.info("polygon: wrote %s", out_path)
+        return 0
+
     logger.info("TODO: implement '%s'", args.subcommand)
     return 0
 
