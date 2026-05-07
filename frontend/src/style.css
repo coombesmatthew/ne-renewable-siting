@@ -1,0 +1,164 @@
+/* Reset + sensible defaults */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  font-size: 14px;
+  color: #222;
+  background: #f4f6f8;
+  overflow: hidden;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Top bar */
+#topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(4px);
+  border-bottom: 1px solid #d0d6dc;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  z-index: 10;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.topbar-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a3552;
+  margin-right: 24px;
+}
+
+.topbar-controls {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.placeholder-note {
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+}
+
+/* Info panel */
+#info-panel {
+  position: fixed;
+  top: 60px;
+  right: 12px;
+  width: 360px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  padding: 16px 18px;
+  z-index: 9;
+  display: none;
+}
+
+#info-panel.visible {
+  display: block;
+}
+
+#info-panel-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: #888;
+  padding: 4px 8px;
+}
+
+#info-panel-close:hover {
+  color: #222;
+}
+
+#info-panel h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: #1a3552;
+  padding-right: 24px;
+}
+
+#info-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+#info-panel td {
+  padding: 5px 4px;
+  vertical-align: top;
+  border-bottom: 1px solid #eee;
+}
+
+#info-panel td.label {
+  color: #666;
+  font-weight: 500;
+  width: 45%;
+}
+
+#info-panel td.value {
+  color: #222;
+  text-align: right;
+}
+
+/* Footer */
+#footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.94);
+  border-top: 1px solid #d0d6dc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  font-size: 11px;
+  color: #555;
+  z-index: 10;
+}
+
+.methodology-link {
+  color: #1a5fa7;
+  text-decoration: none;
+}
+
+.methodology-link:hover {
+  text-decoration: underline;
+}
+
+/* MapLibre attribution control nudged up so it doesn't collide with the footer */
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left {
+  bottom: 28px !important;
+}

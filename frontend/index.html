@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NE England Renewable Siting & Headroom Map</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="topbar">
+      <div class="topbar-title">NE England Renewable Siting &amp; Headroom Map</div>
+      <div class="topbar-controls" id="topbar-controls">
+        <span class="placeholder-note">Mode &amp; tech filters &mdash; Wave 7B</span>
+      </div>
+    </div>
+
+    <div id="map"></div>
+
+    <aside id="info-panel" aria-hidden="true">
+      <button id="info-panel-close" aria-label="Close info panel">&times;</button>
+      <div id="info-panel-body"></div>
+    </aside>
+
+    <footer id="footer">
+      <span class="attribution">
+        Data: NPg, DESNZ REPD, Global Solar/Wind Atlas, planning.data.gov.uk, ONS, HM Land Registry INSPIRE
+      </span>
+      <a class="methodology-link" href="#" id="methodology-link">Methodology</a>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
