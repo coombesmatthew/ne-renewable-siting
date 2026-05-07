@@ -1,0 +1,22 @@
+{
+  "base": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev",
+  "tiles": {
+    "constraints": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/constraints.pmtiles",
+    "ne_polygon": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/ne_polygon.pmtiles",
+    "parcels": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/parcels.pmtiles",
+    "repd": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/repd.pmtiles",
+    "solar": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/solar.pmtiles",
+    "substations": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/substations.pmtiles",
+    "wind": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/wind.pmtiles"
+  },
+  "constraint_layers": [
+    "green_belt",
+    "national_landscape",
+    "national_park",
+    "sssi",
+    "listed_building",
+    "scheduled_monument",
+    "flood_zones"
+  ],
+  "generated_at": "2026-05-07T16:01:08.178974+00:00"
+}

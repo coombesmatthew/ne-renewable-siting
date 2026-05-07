@@ -73,12 +73,36 @@ def _run_manifest() -> None:
     logger.info("manifest: wrote %s", manifest_path)
 
 
+def _run_pmtiles() -> None:
+    from etl.pmtiles_build import build_all_pmtiles
+
+    outputs = build_all_pmtiles()
+    for name, path in outputs.items():
+        logger.info("pmtiles: %s -> %s", name, path)
+
+
+def _run_upload() -> None:
+    import os
+
+    from dotenv import load_dotenv
+
+    from etl.upload_r2 import upload_pmtiles_to_r2, write_tile_urls_json
+
+    load_dotenv()
+    public_base = os.environ["R2_PUBLIC_URL"].rstrip("/")
+    urls = upload_pmtiles_to_r2()
+    manifest_path = write_tile_urls_json(urls, public_base)
+    logger.info("upload: tile_urls.json -> %s", manifest_path)
+
+
 def _run_all() -> None:
-    """Run the Chunk 1 pipeline: polygon -> vector -> raster -> manifest."""
+    """Run the full pipeline: polygon -> vector -> raster -> manifest -> pmtiles -> upload."""
     _run_polygon()
     _run_vector()
     _run_raster()
     _run_manifest()
+    _run_pmtiles()
+    _run_upload()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -106,10 +130,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.subcommand == "manifest":
         _run_manifest()
         return 0
+    if args.subcommand == "pmtiles":
+        _run_pmtiles()
+        return 0
+    if args.subcommand == "upload":
+        _run_upload()
+        return 0
     if args.subcommand == "all":
         _run_all()
         return 0
-    if args.subcommand in ("score", "pmtiles", "upload"):
+    if args.subcommand == "score":
         logger.info("TODO: Chunk 2 — '%s' not yet implemented", args.subcommand)
         return 0
 
