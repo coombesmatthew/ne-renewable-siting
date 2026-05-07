@@ -41,11 +41,6 @@ LA_BOUNDARIES_SOURCE = "ONS LAD Dec 2024 BGC"
 LA_BOUNDARIES_LICENSE = "OGL 3.0"
 
 DEFERRED_LAYERS: dict[str, dict[str, str]] = {
-    "wind_speed_100m": {
-        "type": "raster",
-        "status": "deferred",
-        "reason": "Manual download required from globalwindatlas.info/download/gis-files",
-    },
     "constraints/flood_zones": {
         "type": "vector",
         "status": "deferred",
@@ -108,9 +103,12 @@ def _layer_key(sidecar_path: Path) -> str:
     if str(rel) == ".":
         # Solar's sidecar is named ``solar.manifest.json`` but its layer key
         # in the aggregated manifest reads ``solar_pvout`` (the canonical
-        # raster name). Map it explicitly.
+        # raster name). Map it explicitly. Same story for wind ->
+        # ``wind_speed_100m``.
         if stem == "solar":
             return "solar_pvout"
+        if stem == "wind":
+            return "wind_speed_100m"
         return stem
     return f"{rel.as_posix()}/{stem}"
 

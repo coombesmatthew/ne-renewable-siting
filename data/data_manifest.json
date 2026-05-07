@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-07T14:28:26.684779+00:00",
+  "generated_at": "2026-05-07T14:43:01.784395+00:00",
   "region": "North East England",
   "lad_count": 12,
   "lad_codes": [
@@ -420,9 +420,30 @@
       "manifest_path": "/Users/matthewcoombes/Documents/fuse-applications/data/processed/solar.manifest.json"
     },
     "wind_speed_100m": {
-      "type": "raster",
-      "status": "deferred",
-      "reason": "Manual download required from globalwindatlas.info/download/gis-files"
+      "name": "Global Wind Atlas v3 \u2014 Wind Speed at 100m",
+      "source_url": "https://globalwindatlas.info/en/download/gis-files",
+      "license": "CC-BY 4.0",
+      "attribution": "Global Wind Atlas 3.0, Technical University of Denmark (DTU) and World Bank Group",
+      "last_updated": "2024",
+      "version": "v3.0",
+      "raster_path": "data/raw/wind_speed_100m.tif",
+      "bbox": [
+        -2.7,
+        54.4,
+        -0.7,
+        55.9
+      ],
+      "crs": "EPSG:4326",
+      "resolution_m": 250.0,
+      "min_value": 5.766809463500977,
+      "max_value": 15.08916187286377,
+      "mean_value": 8.885862350463867,
+      "units": "m/s",
+      "height_above_ground_m": 100,
+      "file_size_bytes": 1204326,
+      "status": "live",
+      "output_path": "/Users/matthewcoombes/Documents/fuse-applications/data/raw/wind_speed_100m.tif",
+      "manifest_path": "/Users/matthewcoombes/Documents/fuse-applications/data/processed/wind.manifest.json"
     },
     "constraints/flood_zones": {
       "type": "vector",
@@ -436,9 +457,9 @@
     }
   },
   "totals": {
-    "live_layers": 12,
-    "deferred_layers": 3,
+    "live_layers": 13,
+    "deferred_layers": 2,
     "total_features": 15573,
-    "total_size_bytes": 18843241
+    "total_size_bytes": 20047567
   }
 }

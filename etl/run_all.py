@@ -20,13 +20,9 @@ import argparse
 import logging
 import sys
 
-from etl.config import DATA_RAW
-
 logger = logging.getLogger(__name__)
 
 SUBCOMMANDS = ("polygon", "vector", "raster", "manifest", "score", "pmtiles", "upload", "all")
-
-WIND_RASTER_NAME = "wind_speed_100m.tif"
 
 
 def _run_polygon() -> None:
@@ -57,19 +53,13 @@ def _run_vector() -> None:
 
 def _run_raster() -> None:
     from etl.sources.solar import download_and_clip_solar
+    from etl.sources.wind import clip_wind
 
     solar_path = download_and_clip_solar()
     logger.info("raster: solar -> %s", solar_path)
 
-    wind_path = DATA_RAW / WIND_RASTER_NAME
-    if wind_path.exists():
-        logger.info("raster: wind raster present at %s", wind_path)
-    else:
-        logger.warning(
-            "raster: wind raster %s not found — deferred (manual download "
-            "required from globalwindatlas.info/download/gis-files)",
-            wind_path,
-        )
+    wind_path = clip_wind()
+    logger.info("raster: wind -> %s", wind_path)
 
 
 def _run_manifest() -> None:
