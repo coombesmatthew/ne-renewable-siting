@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+0.15.12/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment
+.env
+.env.local
+
+# Data — raw + processed are gitignored, but commit data/ne_england.geojson
+data/raw/
+data/processed/
+data/pmtiles/
+!data/ne_england.geojson
+!data/data_manifest.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend
+node_modules/
+dist/
+.vite/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo

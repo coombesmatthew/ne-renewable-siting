@@ -1,0 +1,6 @@
+# docker-compose.yml — STUB (to be implemented in Chunk 5)
+#
+# Planned: single `web` service building the Dockerfile above, mounting
+# data/raw/ for source TIFF access, exposing port 8000, loading .env.
+#
+# Placeholder for now — see plan/adaptive-dreaming-curry.md, Chunk 5.
