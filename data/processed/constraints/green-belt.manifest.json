@@ -1,0 +1,26 @@
+{
+  "name": "planning.data.gov.uk \u2014 green-belt",
+  "source_url": "https://files.planning.data.gov.uk/dataset/green-belt.geojson",
+  "license": "OGL 3.0",
+  "last_updated": "2026-05-07",
+  "feature_count": 7,
+  "file_size_bytes": 977130,
+  "properties_keys": [
+    "dataset",
+    "end-date",
+    "entity",
+    "entry-date",
+    "name",
+    "organisation-entity",
+    "prefix",
+    "quality",
+    "reference",
+    "start-date",
+    "typology",
+    "green-belt-core",
+    "local-authority-district"
+  ],
+  "geometry_type": "Mixed:MultiPolygon,Polygon",
+  "output_slug": "green-belt",
+  "source_slug": "green-belt"
+}

@@ -1,0 +1,26 @@
+{
+  "name": "planning.data.gov.uk \u2014 listed-building",
+  "source_url": "https://files.planning.data.gov.uk/dataset/listed-building.geojson",
+  "license": "OGL 3.0",
+  "last_updated": "2026-05-07",
+  "feature_count": 12432,
+  "file_size_bytes": 6638014,
+  "properties_keys": [
+    "dataset",
+    "end-date",
+    "entity",
+    "entry-date",
+    "name",
+    "organisation-entity",
+    "prefix",
+    "quality",
+    "reference",
+    "start-date",
+    "typology",
+    "documentation-url",
+    "listed-building-grade"
+  ],
+  "geometry_type": "Mixed:MultiPolygon,Point,Polygon",
+  "output_slug": "listed-building",
+  "source_slug": "listed-building"
+}

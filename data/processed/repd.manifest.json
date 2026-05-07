@@ -1,0 +1,41 @@
+{
+  "name": "REPD Q1 2026",
+  "source_url": "https://assets.publishing.service.gov.uk/media/69fc56908cc72d2f863ea58d/REPD_publication_Q1_2026.csv",
+  "license": "OGL 3.0",
+  "last_updated": "2026-Q1",
+  "feature_count": 572,
+  "raw_row_count": 14316,
+  "file_size_bytes": 318851,
+  "tech_breakdown": {
+    "Solar Photovoltaics": 295,
+    "Battery": 101,
+    "Wind Onshore": 99,
+    "Anaerobic Digestion": 16,
+    "Landfill Gas": 16,
+    "Biomass (dedicated)": 15,
+    "EfW Incineration": 15,
+    "Advanced Conversion Technologies": 8,
+    "Hydrogen": 5,
+    "Large Hydro": 1,
+    "Small Hydro": 1
+  },
+  "status_breakdown": {
+    "Planning Permission Granted": 259,
+    "Operational": 102,
+    "Planning Application Submitted": 59,
+    "Planning Permission Refused": 32,
+    "Planning Application Withdrawn": 30,
+    "Revised": 21,
+    "Abandoned": 19,
+    "Under Construction": 13,
+    "Planning Permission Expired": 12,
+    "Appeal Refused": 9,
+    "Appeal Granted": 7,
+    "Decommissioned": 4,
+    "Appeal Lodged": 2,
+    "Planning Permission Granted ": 2,
+    "Appeal Withdrawn": 1
+  },
+  "dropped_rows": 5,
+  "notes": "REPD coords are sometimes the planning office, not the actual site \u2014 disclose in methodology."
+}

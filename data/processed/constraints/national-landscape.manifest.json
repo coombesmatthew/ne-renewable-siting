@@ -1,0 +1,29 @@
+{
+  "name": "planning.data.gov.uk \u2014 area-of-outstanding-natural-beauty",
+  "source_url": "https://files.planning.data.gov.uk/dataset/area-of-outstanding-natural-beauty.geojson",
+  "license": "OGL 3.0",
+  "last_updated": "2026-05-07",
+  "feature_count": 2,
+  "file_size_bytes": 283895,
+  "properties_keys": [
+    "dataset",
+    "end-date",
+    "entity",
+    "entry-date",
+    "name",
+    "organisation-entity",
+    "prefix",
+    "quality",
+    "reference",
+    "start-date",
+    "typology",
+    "wikipedia",
+    "website",
+    "wikidata",
+    "twitter",
+    "documentation-url"
+  ],
+  "geometry_type": "Mixed:MultiPolygon,Polygon",
+  "output_slug": "national-landscape",
+  "source_slug": "area-of-outstanding-natural-beauty"
+}

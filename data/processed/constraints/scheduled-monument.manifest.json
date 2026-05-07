@@ -1,0 +1,26 @@
+{
+  "name": "planning.data.gov.uk \u2014 scheduled-monument",
+  "source_url": "https://files.planning.data.gov.uk/dataset/scheduled-monument.geojson",
+  "license": "OGL 3.0",
+  "last_updated": "2026-05-07",
+  "feature_count": 1412,
+  "file_size_bytes": 1883467,
+  "properties_keys": [
+    "dataset",
+    "end-date",
+    "entity",
+    "entry-date",
+    "name",
+    "organisation-entity",
+    "prefix",
+    "quality",
+    "reference",
+    "start-date",
+    "typology",
+    "notes",
+    "documentation-url"
+  ],
+  "geometry_type": "Mixed:MultiPolygon,Polygon",
+  "output_slug": "scheduled-monument",
+  "source_slug": "scheduled-monument"
+}

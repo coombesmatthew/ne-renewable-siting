@@ -20,9 +20,71 @@ import argparse
 import logging
 import sys
 
+from etl.config import DATA_RAW
+
 logger = logging.getLogger(__name__)
 
 SUBCOMMANDS = ("polygon", "vector", "raster", "manifest", "score", "pmtiles", "upload", "all")
+
+WIND_RASTER_NAME = "wind_speed_100m.tif"
+
+
+def _run_polygon() -> None:
+    from etl.ne_polygon import build_ne_polygon
+
+    out_path = build_ne_polygon()
+    logger.info("polygon: wrote %s", out_path)
+
+
+def _run_vector() -> None:
+    from etl.sources.constraints import download_planning_constraints
+    from etl.sources.npg import download_ecr, download_headroom
+    from etl.sources.repd import download_repd
+
+    headroom_path = download_headroom()
+    logger.info("vector: NPg headroom -> %s", headroom_path)
+
+    ecr_path = download_ecr()
+    logger.info("vector: NPg ECR -> %s", ecr_path)
+
+    repd_path = download_repd()
+    logger.info("vector: REPD -> %s", repd_path)
+
+    constraint_paths = download_planning_constraints()
+    for slug, path in constraint_paths.items():
+        logger.info("vector: constraint %s -> %s", slug, path)
+
+
+def _run_raster() -> None:
+    from etl.sources.solar import download_and_clip_solar
+
+    solar_path = download_and_clip_solar()
+    logger.info("raster: solar -> %s", solar_path)
+
+    wind_path = DATA_RAW / WIND_RASTER_NAME
+    if wind_path.exists():
+        logger.info("raster: wind raster present at %s", wind_path)
+    else:
+        logger.warning(
+            "raster: wind raster %s not found — deferred (manual download "
+            "required from globalwindatlas.info/download/gis-files)",
+            wind_path,
+        )
+
+
+def _run_manifest() -> None:
+    from etl.manifest import build_manifest
+
+    manifest_path = build_manifest()
+    logger.info("manifest: wrote %s", manifest_path)
+
+
+def _run_all() -> None:
+    """Run the Chunk 1 pipeline: polygon -> vector -> raster -> manifest."""
+    _run_polygon()
+    _run_vector()
+    _run_raster()
+    _run_manifest()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,14 +101,27 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.subcommand == "polygon":
-        from etl.ne_polygon import build_ne_polygon
-
-        out_path = build_ne_polygon()
-        logger.info("polygon: wrote %s", out_path)
+        _run_polygon()
+        return 0
+    if args.subcommand == "vector":
+        _run_vector()
+        return 0
+    if args.subcommand == "raster":
+        _run_raster()
+        return 0
+    if args.subcommand == "manifest":
+        _run_manifest()
+        return 0
+    if args.subcommand == "all":
+        _run_all()
+        return 0
+    if args.subcommand in ("score", "pmtiles", "upload"):
+        logger.info("TODO: Chunk 2 — '%s' not yet implemented", args.subcommand)
         return 0
 
-    logger.info("TODO: implement '%s'", args.subcommand)
-    return 0
+    # argparse would have rejected anything else, but be defensive.
+    logger.error("Unknown subcommand: %s", args.subcommand)
+    return 2
 
 
 if __name__ == "__main__":

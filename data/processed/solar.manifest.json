@@ -1,0 +1,22 @@
+{
+  "name": "Global Solar Atlas PVOUT (long-term-average)",
+  "source_url": "https://2eueu84zmf.execute-api.eu-west-1.amazonaws.com/prod/download/United%20Kingdom/United-Kingdom_GISdata_LTAym_YearlyMonthlyTotals_GlobalSolarAtlas-v2_GEOTIFF.zip",
+  "license": "CC-BY 4.0",
+  "attribution": "\u00a9 2024 The World Bank, Solar resource data: Solargis.",
+  "last_updated": "2024",
+  "version": "v2.x",
+  "raster_path": "data/raw/solar_pvout.tif",
+  "bbox": [
+    -2.7,
+    54.4,
+    -0.7,
+    55.9
+  ],
+  "crs": "EPSG:4326",
+  "resolution_m": 728.8815863116076,
+  "min_value": 784.1920166015625,
+  "max_value": 985.8099975585938,
+  "mean_value": 935.626220703125,
+  "units": "kWh/kWp/year",
+  "file_size_bytes": 66891
+}

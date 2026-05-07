@@ -1,0 +1,24 @@
+{
+  "name": "planning.data.gov.uk \u2014 site-of-special-scientific-interest",
+  "source_url": "https://files.planning.data.gov.uk/dataset/site-of-special-scientific-interest.geojson",
+  "license": "OGL 3.0",
+  "last_updated": "2026-05-07",
+  "feature_count": 250,
+  "file_size_bytes": 3198717,
+  "properties_keys": [
+    "dataset",
+    "end-date",
+    "entity",
+    "entry-date",
+    "name",
+    "organisation-entity",
+    "prefix",
+    "quality",
+    "reference",
+    "start-date",
+    "typology"
+  ],
+  "geometry_type": "Mixed:MultiPolygon,Polygon",
+  "output_slug": "site-of-special-scientific-interest",
+  "source_slug": "site-of-special-scientific-interest"
+}
