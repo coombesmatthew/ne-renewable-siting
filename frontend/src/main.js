@@ -1224,7 +1224,14 @@ function _renderConstraint(layerId, p) {
 }
 
 function wireInteractions(map) {
-  // Pointer cursor on all clickable layers
+  // Build a small bbox around a click point so small markers (4-8 px circles)
+  // don't require pixel-perfect clicks.
+  const bboxAround = (point, pad = 5) => [
+    [point.x - pad, point.y - pad],
+    [point.x + pad, point.y + pad]
+  ];
+
+  // Pointer cursor on all clickable layers (no buffer — hover is precise)
   map.on('mousemove', (e) => {
     const layers = CLICKABLE_LAYERS().filter((id) => map.getLayer(id));
     const features = map.queryRenderedFeatures(e.point, { layers });
@@ -1232,13 +1239,15 @@ function wireInteractions(map) {
   });
 
   // Single coordinator click handler with priority-based dispatch.
-  // Why one handler instead of N per-layer: per-layer handlers all fire on
-  // overlapping features, with the last-registered handler "winning" the panel —
-  // which previously meant clicking a substation point on a parcel showed the
-  // parcel info. queryRenderedFeatures lets us pick the most specific feature.
+  // Uses a 5px bbox around the click so substation/REPD point markers (small
+  // circles) are forgiving to click. Per-layer handlers were dropped because
+  // all overlapping features fire their handlers on the same click — the
+  // last-registered handler "won" the panel, which made clicks on substation
+  // points sitting on parcels show the parcel info. queryRenderedFeatures
+  // lets us pick the most specific feature explicitly.
   map.on('click', (e) => {
     const layers = CLICKABLE_LAYERS().filter((id) => map.getLayer(id));
-    const features = map.queryRenderedFeatures(e.point, { layers });
+    const features = map.queryRenderedFeatures(bboxAround(e.point), { layers });
     if (!features.length) return;
 
     // Sort features by our priority order
