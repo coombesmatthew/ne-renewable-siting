@@ -81,7 +81,11 @@ const state = {
     'constraint-scheduled-monument': false,
     'solar-raster': false,
     'wind-raster': false,
-    'substation-fill': true,
+    'substation-tier-132': true,
+    'substation-tier-66': true,
+    'substation-tier-33': true,
+    'substation-tier-20': true,
+    'substation-tier-11': true,
     'repd-solar': true,
     'repd-wind': true,
     'repd-battery': true,
@@ -101,6 +105,18 @@ const REPD_TECHS = [
 
 // All known REPD layer ids
 const REPD_LAYER_IDS = REPD_TECHS.map((t) => t.id);
+
+// Substation voltage tiers: each renders as a catchment-fill + point-circle pair,
+// filtered server-side by `voltage_tier` attribute baked into the PMTiles.
+const SUBSTATION_TIERS = [
+  { tier: '132', label: '132 kV — Grid Supply Point',     color: '#cc1f1f' },
+  { tier: '66',  label: '66 kV — GSP / Bulk Supply',      color: '#ff7f0e' },
+  { tier: '33',  label: '33 kV — Bulk Supply Point',      color: '#f0c742' },
+  { tier: '20',  label: '20 kV — Primary',                color: '#7ac74f' },
+  { tier: '11',  label: '11 kV — Primary / distribution', color: '#6a7896' }
+];
+// Catchment fill + line + point IDs per tier — handy for legend toggle and click binding
+const SUBSTATION_POINT_LAYER_IDS = SUBSTATION_TIERS.map((t) => `substation-point-${t.tier}`);
 
 function repdTechFilter(tokens) {
   // tokens === null means "Other" — match anything NOT in the union of all known tokens
@@ -286,24 +302,47 @@ function buildStyle(urls) {
         paint: { 'fill-color': '#bb6688', 'fill-opacity': 0.3 }
       },
 
-      {
-        id: 'substation-fill',
-        type: 'fill',
-        source: 'substations',
-        'source-layer': 'substations',
-        paint: {
-          'fill-color': '#ff6633',
-          'fill-opacity': 0.4,
-          'fill-outline-color': '#cc4422'
+      // Substations — split into 5 voltage tiers (132/66/33/20/11 kV) so the user
+      // can instantly see where each level of the grid sits. Each tier renders
+      // BOTH the catchment polygon (translucent fill + line) AND a point marker
+      // at the actual station location (sized by firm_cap). Both come from the
+      // same PMTiles archive (two source-layers: substation_catchment + substation_point).
+      ...SUBSTATION_TIERS.flatMap((t) => [
+        {
+          id: `substation-catchment-${t.tier}`,
+          type: 'fill',
+          source: 'substations',
+          'source-layer': 'substation_catchment',
+          filter: ['==', ['get', 'voltage_tier'], t.tier],
+          paint: { 'fill-color': t.color, 'fill-opacity': 0.12 }
+        },
+        {
+          id: `substation-catchment-${t.tier}-line`,
+          type: 'line',
+          source: 'substations',
+          'source-layer': 'substation_catchment',
+          filter: ['==', ['get', 'voltage_tier'], t.tier],
+          paint: { 'line-color': t.color, 'line-width': 0.6, 'line-opacity': 0.5 }
+        },
+        {
+          id: `substation-point-${t.tier}`,
+          type: 'circle',
+          source: 'substations',
+          'source-layer': 'substation_point',
+          filter: ['==', ['get', 'voltage_tier'], t.tier],
+          paint: {
+            'circle-color': t.color,
+            'circle-radius': [
+              'interpolate', ['linear'],
+              ['coalesce', ['to-number', ['get', 'firm_cap']], 1],
+              0, 4, 50, 8, 200, 14, 500, 18
+            ],
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 1.5,
+            'circle-opacity': 0.95
+          }
         }
-      },
-      {
-        id: 'substation-line',
-        type: 'line',
-        source: 'substations',
-        'source-layer': 'substations',
-        paint: { 'line-color': '#cc4422', 'line-width': 1 }
-      },
+      ]),
 
       // REPD — split into 5 per-tech layers for clearer "what's where" reading.
       // Color BY tech, opacity BY status (Operational solid; in-planning fainter),
@@ -691,7 +730,7 @@ function buildLayerToggles(map) {
     { id: 'constraint-scheduled-monument', label: 'Scheduled Monuments', swatch: '#aa6688' },
     { id: 'solar-raster', label: 'Solar PVOUT raster', swatch: '#f4c542' },
     { id: 'wind-raster', label: 'Wind speed raster', swatch: '#80b3d3' },
-    { id: 'substation-fill', label: 'Substations', swatch: '#ff6633' },
+    ...SUBSTATION_TIERS.map((t) => ({ id: `substation-tier-${t.tier}`, label: t.label, swatch: t.color })),
     ...REPD_TECHS.map((t) => ({ id: t.id, label: t.label, swatch: t.color }))
   ];
 
@@ -704,9 +743,13 @@ function buildLayerToggles(map) {
         state.layerVis[item.id] = checked;
         const vis = checked ? 'visible' : 'none';
         if (map.getLayer(item.id)) map.setLayoutProperty(item.id, 'visibility', vis);
-        // Also toggle substation-line companion
-        if (item.id === 'substation-fill' && map.getLayer('substation-line')) {
-          map.setLayoutProperty('substation-line', 'visibility', vis);
+        // Substation voltage tier meta-toggle — controls 3 layers per tier
+        // (catchment fill, catchment line, point marker).
+        if (item.id.startsWith('substation-tier-')) {
+          const tier = item.id.slice('substation-tier-'.length);
+          [`substation-catchment-${tier}`, `substation-catchment-${tier}-line`, `substation-point-${tier}`].forEach((id) => {
+            if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
+          });
         }
         // Toggle BUA outline alongside its fill
         if (item.id === 'built-up-areas' && map.getLayer('built-up-areas-line')) {
@@ -978,7 +1021,7 @@ function buildStatusMatch(statusesSet) {
 // Interactions (click handlers + side panel)
 // ---------------------------------------------------------------------------
 function wireInteractions(map) {
-  ['parcels-fill', 'substation-fill', ...REPD_LAYER_IDS].forEach((layer) => {
+  ['parcels-fill', ...SUBSTATION_POINT_LAYER_IDS, ...REPD_LAYER_IDS].forEach((layer) => {
     map.on('mouseenter', layer, () => {
       map.getCanvas().style.cursor = 'pointer';
     });
@@ -1030,7 +1073,11 @@ function wireInteractions(map) {
     });
   });
 
-  map.on('click', 'substation-fill', (e) => {
+  // Bind the same substation info-panel handler to all 5 tier-specific point
+  // layers — point markers are the precise click target; catchment polygons
+  // are visual context only.
+  SUBSTATION_POINT_LAYER_IDS.forEach((layerId) => {
+    map.on('click', layerId, (e) => {
     if (!e.features || !e.features.length) return;
     const f = e.features[0];
     const p = f.properties || {};
@@ -1044,7 +1091,8 @@ function wireInteractions(map) {
           heading: 'Identity',
           rows: [
             ['Name', p.name ?? '-'],
-            ['Primary voltage', p.pvoltage ?? '-']
+            ['Voltage', p.voltage_tier ? `${p.voltage_tier} kV` : (p.pvoltage ?? '-')],
+            ['Type', p.type ?? '-']
           ]
         },
         {
@@ -1068,6 +1116,7 @@ function wireInteractions(map) {
           color: Number.isFinite(demhr) && demhr > 5 ? 'good' : Number.isFinite(demhr) && demhr > 0 ? 'warn' : 'zero'
         }
       ]
+    });
     });
   });
 

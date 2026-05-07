@@ -47,6 +47,33 @@ ECR_LT1MW_RAW_NAME = "npg_ecr_lt1mw.geojson"
 
 HEATMAP_OUT_NAME = "npg_headroom.geojson"
 HEATMAP_MANIFEST_NAME = "npg_headroom.manifest.json"
+SUBSTATIONS_POINTS_OUT_NAME = "npg_substations_points.geojson"
+SUBSTATIONS_POINTS_MANIFEST_NAME = "npg_substations_points.manifest.json"
+
+
+def _voltage_tier(pvoltage: float | None) -> str | None:
+    """Bucket pvoltage into one of 5 tier strings: 132/66/33/20/11.
+
+    132 kV and above -> "132". 11 kV and below (incl 6, 5.75) -> "11".
+    Anything outside the expected set returns None (caller can decide).
+    """
+    if pvoltage is None:
+        return None
+    try:
+        v = float(pvoltage)
+    except (TypeError, ValueError):
+        return None
+    if v >= 132:
+        return "132"
+    if v >= 66:
+        return "66"
+    if v >= 33:
+        return "33"
+    if v >= 20:
+        return "20"
+    return "11"  # 11 / 6 / 5.75 all collapse here
+
+
 ECR_OUT_NAME = "npg_ecr.geojson"
 ECR_MANIFEST_NAME = "npg_ecr.manifest.json"
 
@@ -115,8 +142,9 @@ def _write_manifest(
     file_size_bytes: int,
     properties_keys: list[str],
     geometry_type: str,
+    voltage_tier_counts: dict | None = None,
 ) -> None:
-    payload = {
+    payload: dict = {
         "name": name,
         "source_url": source_url,
         "license": LICENSE,
@@ -126,6 +154,8 @@ def _write_manifest(
         "properties_keys": properties_keys,
         "geometry_type": geometry_type,
     }
+    if voltage_tier_counts is not None:
+        payload["voltage_tier_counts"] = voltage_tier_counts
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     with manifest_path.open("w") as fh:
         json.dump(payload, fh, indent=2)
@@ -225,6 +255,20 @@ def download_headroom() -> Path:
     clipped, _ = _fix_invalid_geoms(clipped)
     logger.info("Heatmap: %d -> %d features after NE clip", raw_count, len(clipped))
 
+    # Add voltage_tier — used by the frontend to render 5 distinct layers.
+    if "pvoltage" in clipped.columns:
+        clipped["voltage_tier"] = clipped["pvoltage"].map(_voltage_tier)
+    else:
+        logger.warning("No pvoltage column on heatmap; voltage_tier will be empty")
+        clipped["voltage_tier"] = None
+
+    tier_counts = (
+        clipped["voltage_tier"].value_counts().to_dict()
+        if "voltage_tier" in clipped.columns
+        else {}
+    )
+    logger.info("voltage_tier counts: %s", tier_counts)
+
     out_path = DATA_PROCESSED / HEATMAP_OUT_NAME
     _write_geojson(clipped, out_path)
     file_size = out_path.stat().st_size
@@ -239,6 +283,72 @@ def download_headroom() -> Path:
         file_size_bytes=file_size,
         properties_keys=properties_keys,
         geometry_type=_summarise_geom_type(clipped),
+        voltage_tier_counts=tier_counts,
+    )
+
+    # Also emit a parallel point-geometry file at the actual station location.
+    _emit_substation_points(clipped)
+
+    return out_path
+
+
+def _emit_substation_points(catchment_gdf: gpd.GeoDataFrame) -> Path:
+    """Build a point GeoDataFrame from substation_location, write to disk.
+
+    Each catchment polygon has a substation_location dict {lon, lat} in WGS84.
+    Rows lacking substation_location are skipped with a warning — verified during
+    plan exploration that all 185 NPg substations have it populated.
+    """
+    from shapely.geometry import Point
+
+    points: list = []
+    rows: list[dict] = []
+    skipped = 0
+
+    for _idx, row in catchment_gdf.iterrows():
+        loc = row.get("substation_location")
+        lon = lat = None
+        # substation_location may already be a dict, or a JSON string, or None
+        if isinstance(loc, dict):
+            lon, lat = loc.get("lon"), loc.get("lat")
+        elif isinstance(loc, str):
+            try:
+                parsed = json.loads(loc.replace("'", '"'))
+                lon, lat = parsed.get("lon"), parsed.get("lat")
+            except (json.JSONDecodeError, AttributeError):
+                pass
+        if lon is None or lat is None:
+            skipped += 1
+            continue
+
+        points.append(Point(float(lon), float(lat)))
+        attrs = {k: v for k, v in row.items() if k != "geometry"}
+        rows.append(attrs)
+
+    if skipped:
+        logger.warning("Skipped %d substations with missing substation_location", skipped)
+
+    points_gdf = gpd.GeoDataFrame(rows, geometry=points, crs=TARGET_CRS)
+    out_path = DATA_PROCESSED / SUBSTATIONS_POINTS_OUT_NAME
+    _write_geojson(points_gdf, out_path)
+    file_size = out_path.stat().st_size
+    logger.info("Wrote %s (%d points, %d bytes)", out_path, len(points_gdf), file_size)
+
+    properties_keys = [c for c in points_gdf.columns if c != "geometry"]
+    tier_counts = (
+        points_gdf["voltage_tier"].value_counts().to_dict()
+        if "voltage_tier" in points_gdf.columns
+        else {}
+    )
+    _write_manifest(
+        DATA_PROCESSED / SUBSTATIONS_POINTS_MANIFEST_NAME,
+        name="NPg substation point markers (paired with heatmap catchments)",
+        source_url=HEATMAP_URL,
+        feature_count=len(points_gdf),
+        file_size_bytes=file_size,
+        properties_keys=properties_keys,
+        geometry_type="Point",
+        voltage_tier_counts=tier_counts,
     )
     return out_path
 

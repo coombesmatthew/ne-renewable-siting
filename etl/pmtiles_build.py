@@ -47,19 +47,8 @@ _VECTOR_JOBS: list[tuple[str, Path, list[str]]] = [
             "--no-tile-stats",
         ],
     ),
-    (
-        "substations",
-        DATA_PROCESSED / "npg_headroom.geojson",
-        [
-            "-Z",
-            "7",
-            "-z",
-            "14",
-            "-l",
-            "substations",
-            "--no-tile-stats",
-        ],
-    ),
+    # Substations are now built via _build_substations() (two source-layers:
+    # catchment polygon + point marker) — see below. Removed from this job list.
     (
         "repd",
         DATA_PROCESSED / "repd.geojson",
@@ -162,6 +151,37 @@ def _build_constraints() -> Path:
         if not src.exists():
             raise FileNotFoundError(f"constraint source missing: {src}")
         args.extend(["-L", f"{layer_name}:{src}"])
+    _run_tippecanoe(args)
+    _verify_pmtiles(out)
+    return out
+
+
+def _build_substations() -> Path:
+    """Build substations.pmtiles with two source-layers: catchment + point.
+
+    Each feature carries a `voltage_tier` attribute so the frontend can render
+    5 separate colour-coded layer pairs (one per voltage class).
+    """
+    out = DATA_PMTILES / "substations.pmtiles"
+    catchment_src = DATA_PROCESSED / "npg_headroom.geojson"
+    point_src = DATA_PROCESSED / "npg_substations_points.geojson"
+    if not catchment_src.exists():
+        raise FileNotFoundError(f"substations catchment source missing: {catchment_src}")
+    if not point_src.exists():
+        raise FileNotFoundError(f"substations point source missing: {point_src}")
+    args = [
+        "-o",
+        str(out),
+        "-Z",
+        "7",
+        "-z",
+        "14",
+        "--no-tile-stats",
+        "-L",
+        f"substation_catchment:{catchment_src}",
+        "-L",
+        f"substation_point:{point_src}",
+    ]
     _run_tippecanoe(args)
     _verify_pmtiles(out)
     return out
@@ -326,6 +346,13 @@ def build_all_pmtiles() -> dict[str, Path]:
         "constraints -> %s (%s bytes)",
         outputs["constraints"].name,
         f"{outputs['constraints'].stat().st_size:,}",
+    )
+
+    outputs["substations"] = _build_substations()
+    logger.info(
+        "substations -> %s (%s bytes)",
+        outputs["substations"].name,
+        f"{outputs['substations'].stat().st_size:,}",
     )
 
     outputs["solar"] = _build_raster_layer("solar", DATA_RAW / "solar_pvout.tif", cmap="inferno")

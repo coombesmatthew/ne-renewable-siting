@@ -1,10 +1,10 @@
 {
-  "name": "NPg substation headroom heatmap",
+  "name": "NPg substation point markers (paired with heatmap catchments)",
   "source_url": "https://northernpowergrid.opendatasoft.com/api/explore/v2.1/catalog/datasets/heatmapsubstationareas/exports/geojson",
   "license": "OGL 3.0",
   "last_updated": "2026-05-07",
-  "feature_count": 185,
-  "file_size_bytes": 2407455,
+  "feature_count": 183,
+  "file_size_bytes": 202170,
   "properties_keys": [
     "name",
     "type",
@@ -41,9 +41,9 @@
     "fault_level_",
     "voltage_tier"
   ],
-  "geometry_type": "Mixed:MultiPolygon,Polygon",
+  "geometry_type": "Point",
   "voltage_tier_counts": {
-    "11": 111,
+    "11": 109,
     "20": 32,
     "66": 21,
     "33": 13,
