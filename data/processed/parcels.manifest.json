@@ -98,7 +98,7 @@
   "primary_key": "parcel_id",
   "attributes_attached": true,
   "attributed_output_path": "/Users/matthewcoombes/Documents/fuse-applications/data/processed/parcels_attributed.geojson",
-  "attributed_file_size_bytes": 468909029,
+  "attributed_file_size_bytes": 484054727,
   "attribute_columns": [
     "area_ha",
     "centroid_lon",
@@ -107,12 +107,26 @@
     "mean_wind_speed_100m_ms",
     "dist_substation_gen_headroom_m",
     "dist_substation_any_headroom_m",
+    "dist_genhr_min_11kv_m",
+    "dist_genhr_min_20kv_m",
+    "dist_genhr_min_33kv_m",
+    "dist_genhr_min_66kv_m",
+    "dist_genhr_min_132kv_m",
     "nearest_substation_name",
     "intersects_aonb",
     "intersects_national_park",
     "intersects_green_belt",
     "intersects_sssi",
-    "intersects_flood"
+    "intersects_flood",
+    "intersects_listed_building",
+    "intersects_scheduled_monument",
+    "dist_aonb_m",
+    "dist_national_park_m",
+    "dist_green_belt_m",
+    "dist_sssi_m",
+    "dist_flood_m",
+    "dist_listed_building_m",
+    "dist_scheduled_monument_m"
   ],
   "summary_stats": {
     "mean_pvout_kwhkwp": {
@@ -126,21 +140,23 @@
       "mean": 8.1891
     },
     "dist_substation_gen_headroom_m": {
-      "min": 30.0,
-      "max": 73863.0,
-      "mean": 23047.5418
+      "min": 29.0,
+      "max": 73864.0,
+      "mean": 22941.8962
     },
     "dist_substation_any_headroom_m": {
-      "min": 21.0,
+      "min": 20.0,
       "max": 43762.0,
-      "mean": 7634.5957
+      "mean": 7608.3725
     },
     "constraint_overlap_counts": {
       "intersects_aonb": 3924,
       "intersects_national_park": 1120,
       "intersects_green_belt": 6283,
       "intersects_sssi": 2945,
-      "intersects_flood": 10548
+      "intersects_flood": 10548,
+      "intersects_listed_building": 2162,
+      "intersects_scheduled_monument": 1484
     }
   }
 }

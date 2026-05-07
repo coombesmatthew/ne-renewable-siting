@@ -3,7 +3,7 @@
   "tiles": {
     "constraints": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/constraints.pmtiles",
     "ne_polygon": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/ne_polygon.pmtiles",
-    "parcels": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/parcels.pmtiles",
+    "parcels": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/parcels.pmtiles?v=2",
     "repd": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/repd.pmtiles?v=2",
     "solar": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/solar.pmtiles",
     "substations": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/substations.pmtiles?v=4",
