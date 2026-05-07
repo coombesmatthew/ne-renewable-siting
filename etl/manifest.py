@@ -41,11 +41,6 @@ LA_BOUNDARIES_SOURCE = "ONS LAD Dec 2024 BGC"
 LA_BOUNDARIES_LICENSE = "OGL 3.0"
 
 DEFERRED_LAYERS: dict[str, dict[str, str]] = {
-    "constraints/flood_zones": {
-        "type": "vector",
-        "status": "deferred",
-        "reason": "ETL agent timed out — will retry in Chunk 2",
-    },
     "constraints/hydropower": {
         "type": "vector",
         "status": "deferred",

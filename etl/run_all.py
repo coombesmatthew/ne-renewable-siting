@@ -34,6 +34,7 @@ def _run_polygon() -> None:
 
 def _run_vector() -> None:
     from etl.sources.constraints import download_planning_constraints
+    from etl.sources.flood import clip_flood_zones
     from etl.sources.npg import download_ecr, download_headroom
     from etl.sources.repd import download_repd
 
@@ -49,6 +50,9 @@ def _run_vector() -> None:
     constraint_paths = download_planning_constraints()
     for slug, path in constraint_paths.items():
         logger.info("vector: constraint %s -> %s", slug, path)
+
+    flood_path = clip_flood_zones()
+    logger.info("vector: flood zones -> %s", flood_path)
 
 
 def _run_raster() -> None:
