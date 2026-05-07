@@ -359,6 +359,9 @@ def attach_parcel_attributes() -> Path:
         ("green-belt.geojson", "intersects_green_belt"),
         ("site-of-special-scientific-interest.geojson", "intersects_sssi"),
         ("flood_zones.geojson", "intersects_flood"),
+        # Listed Buildings and Scheduled Monuments are NOT pre-computed here —
+        # those filters are applied live in the browser via Turf.js spatial
+        # joins against the visible constraint layers.
     ]
 
     t0 = time.perf_counter()

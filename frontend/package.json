@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@turf/boolean-intersects": "^7.3.5",
+    "@turf/boolean-point-in-polygon": "^7.3.5",
     "maplibre-gl": "^4.7.1",
     "pmtiles": "^3.2.1"
   },

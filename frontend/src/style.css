@@ -617,3 +617,64 @@ body {
 body.filter-open .maplibregl-ctrl-bottom-left {
   left: 320px !important;
 }
+
+/* ---------- Flexible parcel filter UI (Develop mode) ---------- */
+.count-badge {
+  display: block;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  background: #eef5fa;
+  border: 1px solid #c7d8e6;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #2c4a66;
+}
+.count-badge.filtered {
+  background: #effaf0;
+  border-color: #b8e0c0;
+  color: #1f5e2e;
+}
+.filter-row {
+  padding: 6px 0;
+  border-bottom: 1px dashed #e6e6e6;
+}
+.filter-row:last-child {
+  border-bottom: none;
+}
+.filter-row.enabled .filter-label {
+  color: #1f7a1f;
+  font-weight: 600;
+}
+.filter-row .filter-enable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.filter-row .filter-enable input[type='checkbox'] {
+  margin: 0;
+}
+.filter-row .filter-label {
+  flex: 1;
+}
+.filter-row .slider-row.inline {
+  margin-top: 6px;
+  padding-left: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.filter-row .slider-row.inline input[type='range'] {
+  flex: 1;
+}
+.filter-row .slider-row.inline input[type='range']:disabled {
+  opacity: 0.4;
+}
+.filter-row .slider-row.inline .value {
+  font-size: 11px;
+  color: #555;
+  min-width: 76px;
+  text-align: right;
+}
