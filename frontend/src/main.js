@@ -1047,22 +1047,99 @@ function buildStatusMatch(statusesSet) {
 // ---------------------------------------------------------------------------
 // Interactions (click handlers + side panel)
 // ---------------------------------------------------------------------------
-function wireInteractions(map) {
-  ['parcels-fill', ...SUBSTATION_POINT_LAYER_IDS, ...REPD_LAYER_IDS].forEach((layer) => {
-    map.on('mouseenter', layer, () => {
-      map.getCanvas().style.cursor = 'pointer';
-    });
-    map.on('mouseleave', layer, () => {
-      map.getCanvas().style.cursor = '';
-    });
-  });
+// All layer IDs that should produce a clickable info panel, ordered by
+// priority (highest first). When a click hits multiple overlapping features,
+// the first match in this list wins — so REPD/substation point markers
+// (small, precise) take precedence over big polygon layers (parcels, BUAs).
+const CLICKABLE_LAYERS = () => [
+  // Renewable projects (point markers) — highest priority
+  ...REPD_LAYER_IDS,
+  // Substation point markers
+  ...SUBSTATION_POINT_LAYER_IDS,
+  // Constraint polygons — small/medium (heritage)
+  'constraint-listed-building',
+  'constraint-scheduled-monument',
+  'constraint-sssi',
+  'constraint-national-park',
+  'constraint-aonb',
+  'constraint-green-belt',
+  'constraint-flood',
+  // Built-up areas
+  'built-up-areas',
+  // Parcels — biggest overlap, lowest priority so they don't shadow specific features
+  'parcels-fill'
+];
 
-  map.on('click', 'parcels-fill', (e) => {
-    if (!e.features || !e.features.length) return;
-    if (state.mode !== 'develop') return;
-    const f = e.features[0];
-    const p = f.properties || {};
-    const sections = [
+function _renderRepd(p) {
+  const ref = p['Ref ID'] ?? p['Ref Id'] ?? p['Reference'] ?? null;
+  return {
+    title: p['Site Name'] ?? 'REPD Site',
+    sections: [
+      {
+        heading: 'Project',
+        rows: [
+          ['Operator', p['Operator (or Applicant)'] ?? '-'],
+          ['Technology', p['Technology Type'] ?? '-'],
+          ['Status', p['Development Status'] ?? '-']
+        ]
+      },
+      {
+        heading: 'Capacity',
+        rows: [['Installed (MWelec)', fmtNumber(p['Installed Capacity (MWelec)'], 2)]]
+      },
+      {
+        heading: 'Planning',
+        rows: [
+          ['Local Authority', p['Planning Authority'] ?? '-'],
+          ref ? ['Reference', String(ref)] : null
+        ].filter(Boolean)
+      }
+    ]
+  };
+}
+
+function _renderSubstation(p) {
+  const genhr = Number(p.genhr);
+  const demhr = Number(p.demhr);
+  const firmCap = Number(p.firm_cap);
+  return {
+    title: `Substation: ${p.name ?? '(unnamed)'}`,
+    sections: [
+      {
+        heading: 'Identity',
+        rows: [
+          ['Name', p.name ?? '-'],
+          ['Type', p.type ?? '-'],
+          ['Primary voltage', p.pvoltage ? `${p.pvoltage} kV` : '-'],
+          ['Local authority', p.local_authority ?? '-']
+        ]
+      },
+      {
+        heading: 'Capacity',
+        rows: [['Firm capacity (MVA)', fmtNumber(firmCap, 1)]]
+      }
+    ],
+    bars: [
+      {
+        label: 'Generation headroom (MVA)',
+        value: genhr,
+        max: 100,
+        color: Number.isFinite(genhr) && genhr > 5 ? 'good' : Number.isFinite(genhr) && genhr > 0 ? 'warn' : 'zero'
+      },
+      {
+        label: 'Demand headroom (MVA)',
+        value: demhr,
+        max: 100,
+        color: Number.isFinite(demhr) && demhr > 5 ? 'good' : Number.isFinite(demhr) && demhr > 0 ? 'warn' : 'zero'
+      }
+    ]
+  };
+}
+
+function _renderParcel(p) {
+  return {
+    title: `Parcel ${p.parcel_id ?? '(unknown)'}`,
+    sections: [
       {
         heading: 'Identity',
         rows: [
@@ -1086,101 +1163,105 @@ function wireInteractions(map) {
           ['Dist to any-headroom sub', fmtKm(p.dist_substation_any_headroom_m)]
         ]
       }
-    ];
-    showInfoPanel({
-      title: `Parcel ${p.parcel_id ?? '(unknown)'}`,
-      sections,
-      constraintFlags: {
-        AONB: truthy(p.intersects_aonb),
-        'National Park': truthy(p.intersects_national_park),
-        'Green Belt': truthy(p.intersects_green_belt),
-        SSSI: truthy(p.intersects_sssi),
-        'Flood Zone': truthy(p.intersects_flood)
-      }
-    });
-  });
+    ],
+    constraintFlags: {
+      AONB: truthy(p.intersects_aonb),
+      'National Park': truthy(p.intersects_national_park),
+      'Green Belt': truthy(p.intersects_green_belt),
+      SSSI: truthy(p.intersects_sssi),
+      'Flood Zone': truthy(p.intersects_flood)
+    }
+  };
+}
 
-  // Bind the same substation info-panel handler to all 5 tier-specific point
-  // layers — point markers are the precise click target; catchment polygons
-  // are visual context only.
-  SUBSTATION_POINT_LAYER_IDS.forEach((layerId) => {
-    map.on('click', layerId, (e) => {
-    if (!e.features || !e.features.length) return;
-    const f = e.features[0];
-    const p = f.properties || {};
-    const genhr = Number(p.genhr);
-    const demhr = Number(p.demhr);
-    const firmCap = Number(p.firm_cap);
-    showInfoPanel({
-      title: `Substation: ${p.name ?? '(unnamed)'}`,
-      sections: [
-        {
-          heading: 'Identity',
-          rows: [
-            ['Name', p.name ?? '-'],
-            ['Type', p.type ?? '-'],
-            ['Primary voltage', p.pvoltage ? `${p.pvoltage} kV` : '-']
-          ]
-        },
-        {
-          heading: 'Capacity',
-          rows: [
-            ['Firm capacity (MVA)', fmtNumber(firmCap, 1)]
-          ]
-        }
-      ],
-      bars: [
-        {
-          label: 'Generation headroom (MVA)',
-          value: genhr,
-          max: 100,
-          color: Number.isFinite(genhr) && genhr > 5 ? 'good' : Number.isFinite(genhr) && genhr > 0 ? 'warn' : 'zero'
-        },
-        {
-          label: 'Demand headroom (MVA)',
-          value: demhr,
-          max: 100,
-          color: Number.isFinite(demhr) && demhr > 5 ? 'good' : Number.isFinite(demhr) && demhr > 0 ? 'warn' : 'zero'
-        }
-      ]
-    });
-    });
-  });
-
-  // Bind the same click handler to all 5 tech-split REPD layers
-  REPD_LAYER_IDS.forEach((layerId) => {
-    map.on('click', layerId, (e) => {
-      if (!e.features || !e.features.length) return;
-      const f = e.features[0];
-      const p = f.properties || {};
-      const ref = p['Ref ID'] ?? p['Ref Id'] ?? p['Reference'] ?? null;
-      const planningRefRow = ref ? ['Reference', String(ref)] : null;
-
-      showInfoPanel({
-        title: p['Site Name'] ?? 'REPD Site',
-        sections: [
-          {
-            heading: 'Project',
-            rows: [
-              ['Operator', p['Operator (or Applicant)'] ?? '-'],
-              ['Technology', p['Technology Type'] ?? '-'],
-              ['Status', p['Development Status'] ?? '-']
-            ].filter(Boolean)
-          },
-          {
-            heading: 'Capacity',
-            rows: [['Installed (MWelec)', fmtNumber(p['Installed Capacity (MWelec)'], 2)]]
-          },
-          {
-            heading: 'Planning',
-            rows: [
-              ['Local Authority', p['Planning Authority'] ?? '-'],
-              planningRefRow
-            ].filter(Boolean)
-          }
+function _renderBua(p) {
+  return {
+    title: p.BUA22NM ?? p.bua22nm ?? 'Built-up area',
+    sections: [
+      {
+        heading: 'Identity',
+        rows: [
+          ['Name', p.BUA22NM ?? p.bua22nm ?? '-'],
+          ['ONS code', p.BUA22CD ?? p.bua22cd ?? '-']
         ]
-      });
-    });
+      }
+    ]
+  };
+}
+
+const _CONSTRAINT_LABELS = {
+  'constraint-aonb': { title: 'AONB / National Landscape', dataset: 'national-landscape' },
+  'constraint-national-park': { title: 'National Park', dataset: 'national-park' },
+  'constraint-green-belt': { title: 'Green Belt', dataset: 'green-belt' },
+  'constraint-sssi': { title: 'SSSI', dataset: 'site-of-special-scientific-interest' },
+  'constraint-flood': { title: 'Flood Risk Zone', dataset: 'flood-risk-zone' },
+  'constraint-listed-building': { title: 'Listed Building', dataset: 'listed-building' },
+  'constraint-scheduled-monument': { title: 'Scheduled Monument', dataset: 'scheduled-monument' }
+};
+
+function _renderConstraint(layerId, p) {
+  const meta = _CONSTRAINT_LABELS[layerId] ?? { title: 'Constraint', dataset: '?' };
+  // planning.data.gov.uk schema commonly has: name, reference, entity, dataset, entry-date.
+  // Flood-risk-zone has flood-risk-level, flood-risk-type instead of name.
+  const isFlood = layerId === 'constraint-flood';
+  const titleVal = isFlood
+    ? `Flood Zone ${p['flood-risk-level'] ?? '?'} — ${p['flood-risk-type'] ?? 'planning'}`
+    : (p.name || meta.title);
+  const rows = [
+    ['Type', meta.title],
+    ['Name', p.name ?? '(no name)'],
+    ['Reference', p.reference ?? '-'],
+    ['Dataset', meta.dataset]
+  ];
+  if (isFlood) {
+    rows.unshift(['Flood risk level', p['flood-risk-level'] ?? '-']);
+    rows.unshift(['Flood risk type', p['flood-risk-type'] ?? '-']);
+  }
+  return {
+    title: titleVal,
+    sections: [{ heading: 'Identity', rows }]
+  };
+}
+
+function wireInteractions(map) {
+  // Pointer cursor on all clickable layers
+  map.on('mousemove', (e) => {
+    const layers = CLICKABLE_LAYERS().filter((id) => map.getLayer(id));
+    const features = map.queryRenderedFeatures(e.point, { layers });
+    map.getCanvas().style.cursor = features.length ? 'pointer' : '';
+  });
+
+  // Single coordinator click handler with priority-based dispatch.
+  // Why one handler instead of N per-layer: per-layer handlers all fire on
+  // overlapping features, with the last-registered handler "winning" the panel —
+  // which previously meant clicking a substation point on a parcel showed the
+  // parcel info. queryRenderedFeatures lets us pick the most specific feature.
+  map.on('click', (e) => {
+    const layers = CLICKABLE_LAYERS().filter((id) => map.getLayer(id));
+    const features = map.queryRenderedFeatures(e.point, { layers });
+    if (!features.length) return;
+
+    // Sort features by our priority order
+    const prio = (id) => {
+      const idx = layers.indexOf(id);
+      return idx === -1 ? 999 : idx;
+    };
+    features.sort((a, b) => prio(a.layer.id) - prio(b.layer.id));
+    const best = features[0];
+    const p = best.properties || {};
+    const layerId = best.layer.id;
+
+    let panel;
+    if (REPD_LAYER_IDS.includes(layerId)) panel = _renderRepd(p);
+    else if (SUBSTATION_POINT_LAYER_IDS.includes(layerId)) panel = _renderSubstation(p);
+    else if (layerId === 'parcels-fill') {
+      if (state.mode !== 'develop') return; // suppress parcel clicks in Acquire
+      panel = _renderParcel(p);
+    } else if (layerId === 'built-up-areas') panel = _renderBua(p);
+    else if (layerId in _CONSTRAINT_LABELS) panel = _renderConstraint(layerId, p);
+    else return;
+
+    showInfoPanel(panel);
   });
 
   document.getElementById('info-panel-close').addEventListener('click', hideInfoPanel);
