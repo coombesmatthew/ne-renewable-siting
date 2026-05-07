@@ -42,6 +42,10 @@ ECR_LT1MW_URL = (
 )
 
 HEATMAP_RAW_NAME = "npg_heatmap.geojson"
+# Authoritative full-coverage manual download from NPg portal — covers BOTH
+# NE and Yorkshire licence areas (683 substations). When present, this takes
+# precedence over the API-fetched cache so the user's hand-curated source wins.
+HEATMAP_FULL_RAW_NAME = "npg_heatmap_full.geojson"
 ECR_GE1MW_RAW_NAME = "npg_ecr_ge1mw.geojson"
 ECR_LT1MW_RAW_NAME = "npg_ecr_lt1mw.geojson"
 
@@ -236,10 +240,18 @@ def download_headroom() -> Path:
     DATA_RAW.mkdir(parents=True, exist_ok=True)
     DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
 
-    cache_path = DATA_RAW / HEATMAP_RAW_NAME
-    _download_to_cache(HEATMAP_URL, cache_path)
+    # Prefer the user-supplied authoritative full-coverage file if present —
+    # it covers both NE + Yorkshire licence areas (683 stations). Otherwise
+    # fall back to the API-fetched single-region export.
+    full_path = DATA_RAW / HEATMAP_FULL_RAW_NAME
+    if full_path.is_file():
+        logger.info("Using authoritative full-coverage NPg heatmap %s", full_path)
+        cache_path = full_path
+    else:
+        cache_path = DATA_RAW / HEATMAP_RAW_NAME
+        _download_to_cache(HEATMAP_URL, cache_path)
+        logger.info("Reading NPg heatmap %s", cache_path)
 
-    logger.info("Reading NPg heatmap %s", cache_path)
     gdf = gpd.read_file(cache_path)
     raw_count = len(gdf)
     logger.info("Loaded %d raw heatmap features (CRS=%s)", raw_count, gdf.crs)
@@ -247,13 +259,13 @@ def download_headroom() -> Path:
     gdf = _ensure_target_crs(gdf)
     gdf, _ = _fix_invalid_geoms(gdf)
 
-    mask = _load_ne_mask()
-    logger.info("Clipping to NE England polygon…")
-    clipped = gpd.clip(gdf, mask)
-    # Clip can produce empty geometries — drop them.
-    clipped = clipped[~clipped.geometry.is_empty & clipped.geometry.notna()].copy()
+    # No polygon clip — the full NPg dataset covers neighbouring Yorkshire too,
+    # which is useful context for projects on the regional border. The frontend
+    # only renders what's in the viewport at any zoom, so showing the full
+    # dataset doesn't add visual clutter to the NE-zoomed default view.
+    clipped = gdf
     clipped, _ = _fix_invalid_geoms(clipped)
-    logger.info("Heatmap: %d -> %d features after NE clip", raw_count, len(clipped))
+    logger.info("Heatmap: %d features (no NE clip — using authoritative full set)", len(clipped))
 
     # Add voltage_tier — used by the frontend to render 5 distinct layers.
     if "pvoltage" in clipped.columns:

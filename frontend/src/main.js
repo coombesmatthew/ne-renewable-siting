@@ -81,11 +81,10 @@ const state = {
     'constraint-scheduled-monument': false,
     'solar-raster': false,
     'wind-raster': false,
-    'substation-tier-132': true,
-    'substation-tier-66': true,
-    'substation-tier-33': true,
-    'substation-tier-20': true,
-    'substation-tier-11': true,
+    'substation-tier-GSP': true,
+    'substation-tier-BSP': true,
+    'substation-tier-Primary': true,
+    'parcels-fill': true,
     'repd-solar': true,
     'repd-wind': true,
     'repd-battery': true,
@@ -106,14 +105,15 @@ const REPD_TECHS = [
 // All known REPD layer ids
 const REPD_LAYER_IDS = REPD_TECHS.map((t) => t.id);
 
-// Substation voltage tiers: each renders as a catchment-fill + point-circle pair,
-// filtered server-side by `voltage_tier` attribute baked into the PMTiles.
+// Substation tiers grouped by FUNCTIONAL TYPE (GSP / BSP / Primary). Each renders
+// as a catchment-fill + point-circle pair, filtered by the `type` attribute
+// baked into the PMTiles. Maps to the UK grid hierarchy in a renewable-siting
+// context: GSP = transmission interface (>50 MW projects); BSP = utility-scale
+// (5-50 MW); Primary = distribution-level (sub-MW to ~10 MW).
 const SUBSTATION_TIERS = [
-  { tier: '132', label: '132 kV — Grid Supply Point',     color: '#cc1f1f' },
-  { tier: '66',  label: '66 kV — GSP / Bulk Supply',      color: '#ff7f0e' },
-  { tier: '33',  label: '33 kV — Bulk Supply Point',      color: '#f0c742' },
-  { tier: '20',  label: '20 kV — Primary',                color: '#7ac74f' },
-  { tier: '11',  label: '11 kV — Primary / distribution', color: '#6a7896' }
+  { tier: 'GSP',     label: 'GSP — Grid Supply Point (transmission interface)',  color: '#cc1f1f' },
+  { tier: 'BSP',     label: 'BSP — Bulk Supply Point (utility-scale)',           color: '#ff7f0e' },
+  { tier: 'Primary', label: 'Primary substation (distribution)',                 color: '#6a7896' }
 ];
 // Catchment fill + line + point IDs per tier — handy for legend toggle and click binding
 const SUBSTATION_POINT_LAYER_IDS = SUBSTATION_TIERS.map((t) => `substation-point-${t.tier}`);
@@ -313,7 +313,7 @@ function buildStyle(urls) {
           type: 'fill',
           source: 'substations',
           'source-layer': 'substation_catchment',
-          filter: ['==', ['get', 'voltage_tier'], t.tier],
+          filter: ['==', ['get', 'type'], t.tier],
           paint: { 'fill-color': t.color, 'fill-opacity': 0.12 }
         },
         {
@@ -321,7 +321,7 @@ function buildStyle(urls) {
           type: 'line',
           source: 'substations',
           'source-layer': 'substation_catchment',
-          filter: ['==', ['get', 'voltage_tier'], t.tier],
+          filter: ['==', ['get', 'type'], t.tier],
           paint: { 'line-color': t.color, 'line-width': 0.6, 'line-opacity': 0.5 }
         },
         {
@@ -329,7 +329,7 @@ function buildStyle(urls) {
           type: 'circle',
           source: 'substations',
           'source-layer': 'substation_point',
-          filter: ['==', ['get', 'voltage_tier'], t.tier],
+          filter: ['==', ['get', 'type'], t.tier],
           paint: {
             'circle-color': t.color,
             'circle-radius': [
@@ -717,9 +717,49 @@ function buildAcquireFilters(map) {
 }
 
 function buildLayerToggles(map) {
-  const sec = section('Layers', { collapsible: true, collapsed: true });
+  // Top-level container — multiple grouped sub-sections under it.
+  const wrap = document.createElement('div');
+  wrap.className = 'filter-section-wrap';
 
-  const items = [
+  // Toggle handler shared across all groups
+  const onToggle = (item) => (checked) => {
+    state.layerVis[item.id] = checked;
+    const vis = checked ? 'visible' : 'none';
+    if (map.getLayer(item.id)) map.setLayoutProperty(item.id, 'visibility', vis);
+    // Substation tier meta-toggle controls 3 layers per tier
+    if (item.id.startsWith('substation-tier-')) {
+      const tier = item.id.slice('substation-tier-'.length);
+      [`substation-catchment-${tier}`, `substation-catchment-${tier}-line`, `substation-point-${tier}`].forEach((id) => {
+        if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
+      });
+    }
+    // Parcels meta-toggle controls fill + line companion
+    if (item.id === 'parcels-fill' && map.getLayer('parcels-line')) {
+      map.setLayoutProperty('parcels-line', 'visibility', vis);
+    }
+    // BUA meta-toggle controls fill + line
+    if (item.id === 'built-up-areas' && map.getLayer('built-up-areas-line')) {
+      map.setLayoutProperty('built-up-areas-line', 'visibility', vis);
+    }
+  };
+
+  const buildGroup = (title, items, opts = {}) => {
+    const sec = section(title, { collapsible: true, collapsed: opts.collapsed ?? false });
+    for (const item of items) {
+      sec.appendChild(checkbox({
+        label: item.label,
+        checked: !!state.layerVis[item.id],
+        swatch: item.swatch,
+        onChange: onToggle(item)
+      }));
+    }
+    return sec;
+  };
+
+  // RISKS — what would block development. Includes hard exclusions (NP, SSSI),
+  // soft constraints (AONB, Green Belt), built-up areas, flood zones, and
+  // heritage layers (listed buildings, scheduled monuments).
+  wrap.appendChild(buildGroup('Risks', [
     { id: 'constraint-aonb', label: 'AONB / National Landscape', swatch: '#88dd88' },
     { id: 'constraint-national-park', label: 'National Park', swatch: '#66cc66' },
     { id: 'constraint-green-belt', label: 'Green Belt', swatch: '#aacc88' },
@@ -727,40 +767,27 @@ function buildLayerToggles(map) {
     { id: 'constraint-flood', label: 'Flood Zone', swatch: '#5588cc' },
     { id: 'built-up-areas', label: 'Built-up areas', swatch: '#666666' },
     { id: 'constraint-listed-building', label: 'Listed Buildings', swatch: '#bb6688' },
-    { id: 'constraint-scheduled-monument', label: 'Scheduled Monuments', swatch: '#aa6688' },
+    { id: 'constraint-scheduled-monument', label: 'Scheduled Monuments', swatch: '#aa6688' }
+  ]));
+
+  // SUBSTATIONS — by functional type (UK grid hierarchy)
+  wrap.appendChild(buildGroup('Substations', SUBSTATION_TIERS.map((t) => ({
+    id: `substation-tier-${t.tier}`, label: t.label, swatch: t.color
+  }))));
+
+  // RENEWABLE PROJECTS — REPD pipeline, split by tech
+  wrap.appendChild(buildGroup('Renewable Projects', REPD_TECHS.map((t) => ({
+    id: t.id, label: t.label, swatch: t.color
+  }))));
+
+  // OTHER — parcels (the developable-area layer) + raster resource overlays
+  wrap.appendChild(buildGroup('Land & resource', [
+    { id: 'parcels-fill', label: 'Developable parcels (≥2 ha)', swatch: '#4a90e2' },
     { id: 'solar-raster', label: 'Solar PVOUT raster', swatch: '#f4c542' },
-    { id: 'wind-raster', label: 'Wind speed raster', swatch: '#80b3d3' },
-    ...SUBSTATION_TIERS.map((t) => ({ id: `substation-tier-${t.tier}`, label: t.label, swatch: t.color })),
-    ...REPD_TECHS.map((t) => ({ id: t.id, label: t.label, swatch: t.color }))
-  ];
+    { id: 'wind-raster', label: 'Wind speed raster', swatch: '#80b3d3' }
+  ], { collapsed: true }));
 
-  for (const item of items) {
-    const cb = checkbox({
-      label: item.label,
-      checked: !!state.layerVis[item.id],
-      swatch: item.swatch,
-      onChange: (checked) => {
-        state.layerVis[item.id] = checked;
-        const vis = checked ? 'visible' : 'none';
-        if (map.getLayer(item.id)) map.setLayoutProperty(item.id, 'visibility', vis);
-        // Substation voltage tier meta-toggle — controls 3 layers per tier
-        // (catchment fill, catchment line, point marker).
-        if (item.id.startsWith('substation-tier-')) {
-          const tier = item.id.slice('substation-tier-'.length);
-          [`substation-catchment-${tier}`, `substation-catchment-${tier}-line`, `substation-point-${tier}`].forEach((id) => {
-            if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
-          });
-        }
-        // Toggle BUA outline alongside its fill
-        if (item.id === 'built-up-areas' && map.getLayer('built-up-areas-line')) {
-          map.setLayoutProperty('built-up-areas-line', 'visibility', vis);
-        }
-      }
-    });
-    sec.appendChild(cb);
-  }
-
-  return sec;
+  return wrap;
 }
 
 // ---------------------------------------------------------------------------
@@ -1091,8 +1118,8 @@ function wireInteractions(map) {
           heading: 'Identity',
           rows: [
             ['Name', p.name ?? '-'],
-            ['Voltage', p.voltage_tier ? `${p.voltage_tier} kV` : (p.pvoltage ?? '-')],
-            ['Type', p.type ?? '-']
+            ['Type', p.type ?? '-'],
+            ['Primary voltage', p.pvoltage ? `${p.pvoltage} kV` : '-']
           ]
         },
         {

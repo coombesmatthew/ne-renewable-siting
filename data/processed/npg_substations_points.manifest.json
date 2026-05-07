@@ -3,8 +3,8 @@
   "source_url": "https://northernpowergrid.opendatasoft.com/api/explore/v2.1/catalog/datasets/heatmapsubstationareas/exports/geojson",
   "license": "OGL 3.0",
   "last_updated": "2026-05-07",
-  "feature_count": 183,
-  "file_size_bytes": 202170,
+  "feature_count": 681,
+  "file_size_bytes": 757985,
   "properties_keys": [
     "name",
     "type",
@@ -43,10 +43,10 @@
   ],
   "geometry_type": "Point",
   "voltage_tier_counts": {
-    "11": 109,
+    "11": 514,
+    "33": 82,
+    "66": 32,
     "20": 32,
-    "66": 21,
-    "33": 13,
-    "132": 8
+    "132": 21
   }
 }
