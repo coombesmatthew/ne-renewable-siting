@@ -14,6 +14,7 @@ dependencies = [
     "fiona",
     "boto3>=1.43.5",
     "python-dotenv>=1.2.2",
+    "scipy>=1.17.1",
 ]
 
 [project.optional-dependencies]
