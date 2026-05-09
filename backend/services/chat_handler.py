@@ -1,12 +1,23 @@
 """Chat handler — runs Claude tool-use loop and yields SSE chunks.
 
 The endpoint streams text chunks back to the browser as Server-Sent
-Events. We synchronously run the Claude tool-use loop (because the
-Anthropic streaming API + tool use is non-trivial) and then split the
-final text into word chunks for visual flow.
+Events using ``client.messages.stream(...)`` so the user sees text
+appear character-by-character as the model writes it.
 
-This is good enough for the MVP. A future iteration could use the
-streaming Anthropic API to surface tokens as they arrive.
+Typed event payload schema:
+
+* ``{"type": "tool_call", "name": "<tool_name>"}`` — surface as 🔧 chip
+* ``{"type": "tool_result", "name": "<tool_name>", "summary": "..."}`` —
+  finish the chip with a one-line UX summary
+* ``{"type": "text", "text": "<delta>"}`` — append delta to current
+  assistant message bubble
+* ``{"type": "error", "error": "<message>"}`` — terminal
+* ``[DONE]`` — terminal
+
+The Anthropic SDK's streaming API exposes a synchronous context
+manager. To keep the FastAPI worker responsive we drive the stream on a
+background thread and pipe events back to the async generator through a
+thread-safe queue.
 """
 
 from __future__ import annotations
@@ -14,95 +25,163 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 from collections.abc import AsyncGenerator
+from queue import Queue
 from typing import Any
 
 from anthropic import Anthropic  # pyright: ignore[reportMissingImports]
 
-from backend.services.claude_tools import TOOL_DEFS, execute_tool
+from backend.services.claude_tools import (
+    TOOL_DEFS,
+    _summarize_tool_result,
+    execute_tool,
+)
 
-SYSTEM_PROMPT = """You are an assistant for an interactive map of renewable-energy siting opportunities in North East England. You have access to tools that let you query parcels, substations, REPD projects, and sample solar/wind resource rasters.
+SYSTEM_PROMPT = """You are an assistant for an interactive map of renewable-energy siting opportunities in NE England (~33,000 land parcels >=2 ha across 12 LADs, plus NPg substations GSP/BSP/Primary, DESNZ REPD pipeline + operational projects, planning constraints).
 
-Scope: This map covers ~33,000 land parcels (>=2 ha) across the 12 NE England local authorities, plus Northern Powergrid substations (GSP/BSP/Primary), the DESNZ Renewable Energy Planning Database (operational + pipeline projects), and planning constraints (AONB, National Park, Green Belt, SSSI, flood zones, listed buildings, scheduled monuments).
+Style:
+- Be concise. Bullets for lists.
+- Always cite specific parcel_ids, substation names, and REPD project names you reference — they're the link back to the map.
+- Never apologise or hedge ("I'd be happy to..."). Just answer.
+- If a question is off-topic, briefly redirect.
+- Use the tools — never invent data.
 
-Be concise. Use bullets for lists. Cite specific parcel IDs / substation names / REPD project names when answering. If a question is off-topic or outside NE England, briefly say so and redirect to the map's scope. Don't invent data — use the tools.
+Tools:
+- find_parcels(...) — broad parcel filtering (the most powerful tool; combine multiple criteria)
+- get_parcel(parcel_id | lng+lat) — single parcel by ID or location
+- search_substations(q, limit) — find substations by name substring
+- search_repd(tech, status, capacity, bbox, limit) — pipeline + operational project search
+- sample_renewables_at(lng, lat) — solar PVOUT and wind at an arbitrary point
 
-Note: the tools do NOT support broad parcel queries by attribute (e.g. "find parcels with good wind near a 33 kV substation with no AONB"). For that, direct the user to the filter panel in the map UI. The `get_parcel` tool only fetches a single parcel by ID or lng/lat.
-
-Common questions you should handle:
-- "What's the largest battery project under construction in Durham?" — use search_repd with tech=['Battery'], status=['Under Construction'].
-- "Tell me about substation Hartmoor" — use search_substations.
-- "What's the wind speed at lat/lon?" — use sample_renewables_at.
-- "Tell me about parcel NE-001234" — use get_parcel."""
+Worked patterns:
+- "Find 5 parcels >10 ha with wind > 8 m/s within 5 km of a 33 kV substation, no AONB" → find_parcels with min_area_ha=10, min_wind_speed_100m_ms=8, max_dist_substation_gen_headroom_m=5000, min_voltage_kv="33", exclude_aonb=true, limit=5
+- "Operational solar farms over 5 MW in County Durham" → search_repd with tech=["Solar Photovoltaics"], status=["Operational"], min_capacity_mw=5 — then narrow by inspecting county field in results
+- "Compare wind on parcel NE-001234 vs the nearest hilltop" → get_parcel for the parcel, sample_renewables_at for the hilltop coordinate"""
 
 MODEL = "claude-haiku-4-5-20251001"
-
-
-def _call_claude_with_tools(
-    client: Anthropic,
-    messages: list[dict[str, Any]],
-    max_tool_rounds: int = 4,
-) -> str:
-    """Run the Claude tool-use loop and return the final assistant text."""
-
-    for _ in range(max_tool_rounds + 1):
-        resp = client.messages.create(
-            model=MODEL,
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            tools=TOOL_DEFS,
-            messages=messages,
-        )
-
-        if resp.stop_reason == "tool_use":
-            # Echo the assistant turn back into history (required by the
-            # API) and execute every tool call in this turn.
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": [b.model_dump() for b in resp.content],
-                }
-            )
-            tool_uses = [b for b in resp.content if getattr(b, "type", None) == "tool_use"]
-            tool_results: list[dict[str, Any]] = []
-            for tu in tool_uses:
-                result = execute_tool(tu.name, dict(tu.input or {}))
-                tool_results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": tu.id,
-                        "content": json.dumps(result, default=str),
-                    }
-                )
-            messages.append({"role": "user", "content": tool_results})
-            continue
-
-        # end_turn / max_tokens / stop_sequence — collect text blocks.
-        return "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
-
-    return "(max tool rounds reached)"
+MAX_TOOL_ROUNDS = 6
 
 
 async def chat_sse_stream(
     messages: list[dict[str, Any]],
 ) -> AsyncGenerator[str, None]:
-    """Yield SSE-formatted lines to stream a Claude response."""
+    """Yield SSE-formatted lines streaming a Claude tool-use response.
+
+    The Anthropic streaming context manager is synchronous; we run it on
+    a worker thread and pipe events through a queue so this generator
+    stays async-friendly.
+    """
 
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
-        yield 'data: {"error": "ANTHROPIC_API_KEY not configured"}\n\n'
+        yield (
+            "data: "
+            + json.dumps({"type": "error", "error": "ANTHROPIC_API_KEY not configured"})
+            + "\n\n"
+        )
         yield "data: [DONE]\n\n"
         return
 
-    client = Anthropic(api_key=api_key)
-    # Run the (synchronous) SDK call off the event loop so we don't
-    # block the FastAPI worker.
-    loop = asyncio.get_event_loop()
-    text = await loop.run_in_executor(None, _call_claude_with_tools, client, list(messages))
+    q: Queue[Any] = Queue()
+    SENTINEL = object()
 
-    # Stream in word chunks for visual flow. The frontend should
-    # concatenate `text` fields until [DONE].
-    for chunk in text.split(" "):
-        yield f"data: {json.dumps({'text': chunk + ' '})}\n\n"
-        await asyncio.sleep(0.02)
+    def producer() -> None:
+        try:
+            client = Anthropic(api_key=api_key)
+            msgs: list[dict[str, Any]] = list(messages)
+
+            for _ in range(MAX_TOOL_ROUNDS + 1):
+                with client.messages.stream(
+                    model=MODEL,
+                    max_tokens=2048,
+                    system=SYSTEM_PROMPT,
+                    tools=TOOL_DEFS,
+                    messages=msgs,
+                ) as stream:
+                    current_tool_use: Any = None
+                    current_tool_input_json = ""
+                    for event in stream:
+                        et = getattr(event, "type", None)
+                        if et == "content_block_start":
+                            block = getattr(event, "content_block", None)
+                            if block is not None and getattr(block, "type", None) == "tool_use":
+                                current_tool_use = block
+                                current_tool_input_json = ""
+                                q.put(
+                                    {
+                                        "type": "tool_call",
+                                        "name": getattr(block, "name", ""),
+                                    }
+                                )
+                        elif et == "content_block_delta":
+                            delta = getattr(event, "delta", None)
+                            dt = getattr(delta, "type", None) if delta else None
+                            if dt == "text_delta":
+                                q.put(
+                                    {
+                                        "type": "text",
+                                        "text": getattr(delta, "text", ""),
+                                    }
+                                )
+                            elif dt == "input_json_delta":
+                                current_tool_input_json += getattr(delta, "partial_json", "")
+                        elif et == "content_block_stop" and current_tool_use is not None:
+                            try:
+                                parsed = (
+                                    json.loads(current_tool_input_json)
+                                    if current_tool_input_json
+                                    else {}
+                                )
+                            except json.JSONDecodeError:
+                                parsed = {}
+                            tool_name = getattr(current_tool_use, "name", "")
+                            result = execute_tool(tool_name, parsed)
+                            summary = _summarize_tool_result(tool_name, result)
+                            q.put(
+                                {
+                                    "type": "tool_result",
+                                    "name": tool_name,
+                                    "summary": summary,
+                                }
+                            )
+                            current_tool_use = None
+                    final = stream.get_final_message()
+
+                if final.stop_reason == "tool_use":
+                    msgs.append(
+                        {
+                            "role": "assistant",
+                            "content": [b.model_dump() for b in final.content],
+                        }
+                    )
+                    tool_results: list[dict[str, Any]] = []
+                    for tu in [b for b in final.content if getattr(b, "type", None) == "tool_use"]:
+                        result = execute_tool(tu.name, dict(tu.input or {}))
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tu.id,
+                                "content": json.dumps(result, default=str),
+                            }
+                        )
+                    msgs.append({"role": "user", "content": tool_results})
+                    continue
+                # end_turn / max_tokens / stop_sequence — finished
+                break
+        except Exception as exc:  # pragma: no cover — surface to client
+            q.put({"type": "error", "error": str(exc)[:200]})
+        finally:
+            q.put(SENTINEL)
+
+    threading.Thread(target=producer, daemon=True).start()
+
+    loop = asyncio.get_event_loop()
+    while True:
+        item = await loop.run_in_executor(None, q.get)
+        if item is SENTINEL:
+            break
+        yield "data: " + json.dumps(item) + "\n\n"
+        if isinstance(item, dict) and item.get("type") == "error":
+            break
     yield "data: [DONE]\n\n"

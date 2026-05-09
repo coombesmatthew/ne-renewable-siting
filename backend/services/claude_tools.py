@@ -3,10 +3,11 @@
 Each tool here is a thin wrapper around the same helpers used by the
 HTTP routers, so the model gets the exact same data the UI does.
 
-The four tools cover the read-only spatial questions an end-user is
+The five tools cover the read-only spatial questions an end-user is
 likely to ask in chat:
 
 * ``get_parcel`` — lookup-by-id or point-in-polygon
+* ``find_parcels`` — broad parcel-attribute search
 * ``search_substations`` — substring search by name
 * ``search_repd`` — filter the renewable energy planning database
 * ``sample_renewables_at`` — point sample of solar/wind rasters
@@ -39,6 +40,61 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 },
                 "lng": {"type": "number"},
                 "lat": {"type": "number"},
+            },
+        },
+    },
+    {
+        "name": "find_parcels",
+        "description": (
+            "Search the 33,363 NE England parcels by attribute filters. Returns up to "
+            "`limit` parcels (default 10), sorted by area_ha descending. Use this when "
+            "the user asks broad parcel-attribute questions like 'find parcels >10 ha "
+            "with wind > 8 m/s within 5 km of a 33 kV substation and no AONB overlap'. "
+            "Each result includes parcel_id, area_ha, centroid_lon, centroid_lat, "
+            "lad_name, mean_pvout_kwhkwp, mean_wind_speed_100m_ms, "
+            "dist_substation_gen_headroom_m, dist_substation_any_headroom_m, "
+            "nearest_substation_name, and the 7 boolean intersects_* flags."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "min_pvout_kwhkwp": {
+                    "type": "number",
+                    "description": "kWh/kWp/yr",
+                },
+                "min_wind_speed_100m_ms": {"type": "number"},
+                "max_dist_substation_gen_headroom_m": {
+                    "type": "number",
+                    "description": "metres",
+                },
+                "max_dist_substation_any_headroom_m": {"type": "number"},
+                "min_voltage_kv": {
+                    "type": "string",
+                    "enum": ["11", "20", "33", "66", "132"],
+                    "description": (
+                        "Required minimum substation voltage. Filters against "
+                        "dist_genhr_min_<voltage>kv_m. Combined with "
+                        "max_dist_substation_gen_headroom_m to mean 'within X "
+                        "metres of a substation at >=this voltage with gen headroom'."
+                    ),
+                },
+                "min_area_ha": {"type": "number"},
+                "exclude_aonb": {"type": "boolean"},
+                "exclude_national_park": {"type": "boolean"},
+                "exclude_green_belt": {"type": "boolean"},
+                "exclude_sssi": {"type": "boolean"},
+                "exclude_flood": {"type": "boolean"},
+                "exclude_listed_building": {"type": "boolean"},
+                "exclude_scheduled_monument": {"type": "boolean"},
+                "lad_code": {
+                    "type": "string",
+                    "description": "ONS LAD24CD",
+                },
+                "lad_name": {
+                    "type": "string",
+                    "description": "case-insensitive substring match",
+                },
+                "limit": {"type": "integer", "default": 10},
             },
         },
     },
@@ -149,6 +205,106 @@ def execute_tool(name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
             return _row_to_parcel(row).model_dump()
         return {"error": "supply parcel_id or lng+lat"}
 
+    if name == "find_parcels":
+        df = ds.parcels  # GeoDataFrame
+        f = df
+
+        # Numeric "min" filters
+        for col, key in [
+            ("mean_pvout_kwhkwp", "min_pvout_kwhkwp"),
+            ("mean_wind_speed_100m_ms", "min_wind_speed_100m_ms"),
+            ("area_ha", "min_area_ha"),
+        ]:
+            if tool_input.get(key) is not None:
+                try:
+                    f = f[f[col] >= float(tool_input[key])]
+                except (TypeError, ValueError):
+                    return {"error": f"{key} must be a number"}
+
+        # Distance filters: voltage tier (use the right column) + any-hr distance
+        if tool_input.get("max_dist_substation_gen_headroom_m") is not None:
+            v = tool_input.get("min_voltage_kv") or "11"
+            col = f"dist_genhr_min_{v}kv_m"
+            if col not in f.columns:
+                return {"error": f"unknown voltage column {col}"}
+            try:
+                f = f[f[col] <= float(tool_input["max_dist_substation_gen_headroom_m"])]
+            except (TypeError, ValueError):
+                return {"error": "max_dist_substation_gen_headroom_m must be a number"}
+        if tool_input.get("max_dist_substation_any_headroom_m") is not None:
+            try:
+                f = f[
+                    f["dist_substation_any_headroom_m"]
+                    <= float(tool_input["max_dist_substation_any_headroom_m"])
+                ]
+            except (TypeError, ValueError):
+                return {"error": "max_dist_substation_any_headroom_m must be a number"}
+
+        # Boolean exclusions
+        for excl, col in [
+            ("exclude_aonb", "intersects_aonb"),
+            ("exclude_national_park", "intersects_national_park"),
+            ("exclude_green_belt", "intersects_green_belt"),
+            ("exclude_sssi", "intersects_sssi"),
+            ("exclude_flood", "intersects_flood"),
+            ("exclude_listed_building", "intersects_listed_building"),
+            ("exclude_scheduled_monument", "intersects_scheduled_monument"),
+        ]:
+            if tool_input.get(excl):
+                f = f[~f[col].astype(bool)]
+
+        # LAD filters
+        if tool_input.get("lad_code"):
+            f = f[f["lad_code"] == str(tool_input["lad_code"])]
+        if tool_input.get("lad_name"):
+            needle = str(tool_input["lad_name"]).lower()
+            f = f[f["lad_name"].str.lower().str.contains(needle, na=False)]
+
+        total_matched = int(len(f))
+        try:
+            limit = int(tool_input.get("limit", 10))
+        except (TypeError, ValueError):
+            limit = 10
+        f = f.sort_values("area_ha", ascending=False).head(limit)
+
+        cols = [
+            "parcel_id",
+            "area_ha",
+            "centroid_lon",
+            "centroid_lat",
+            "lad_name",
+            "mean_pvout_kwhkwp",
+            "mean_wind_speed_100m_ms",
+            "dist_substation_gen_headroom_m",
+            "dist_substation_any_headroom_m",
+            "nearest_substation_name",
+            "intersects_aonb",
+            "intersects_national_park",
+            "intersects_green_belt",
+            "intersects_sssi",
+            "intersects_flood",
+            "intersects_listed_building",
+            "intersects_scheduled_monument",
+        ]
+        cols = [c for c in cols if c in f.columns]
+        # Drop the geometry; keep only attribute columns we want.
+        records = f[cols].to_dict(orient="records")
+        # Coerce numpy bools / NaN-safe coerce so JSON encoding is happy.
+        cleaned_results: list[dict[str, Any]] = []
+        for rec in records:
+            clean: dict[str, Any] = {}
+            for k, v in rec.items():
+                if k.startswith("intersects_"):
+                    clean[k] = bool(v)
+                else:
+                    clean[k] = v
+            cleaned_results.append(clean)
+        return {
+            "count": len(cleaned_results),
+            "total_matched": total_matched,
+            "results": cleaned_results,
+        }
+
     if name == "search_substations":
         from backend.routers.substation import _search_substations
 
@@ -182,3 +338,35 @@ def execute_tool(name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
         }
 
     return {"error": f"unknown tool {name}"}
+
+
+def _summarize_tool_result(name: str, result: Any) -> str:
+    """Return a one-line UX badge summary for a tool result.
+
+    Used by the chat handler to emit ``tool_result`` SSE events that
+    surface as inline chips in the frontend.
+    """
+
+    if isinstance(result, dict) and "error" in result:
+        return f"error: {result['error']}"
+    if name == "find_parcels":
+        return (
+            f"Found {result.get('count', 0)} of {result.get('total_matched', '?')} matching parcels"
+        )
+    if name == "search_substations":
+        return f"Found {result.get('count', 0)} substations"
+    if name == "search_repd":
+        return f"Found {result.get('count', 0)} of {result.get('total_matched', '?')} REPD projects"
+    if name == "get_parcel":
+        if isinstance(result, dict) and "parcel_id" in result:
+            return f"Parcel {result['parcel_id']}, {result.get('area_ha', '?')} ha"
+        return "Parcel lookup"
+    if name == "sample_renewables_at":
+        if not isinstance(result, dict):
+            return "Done"
+        pv = result.get("pvout_kwhkwp")
+        ws = result.get("wind_speed_100m_ms")
+        if pv is not None:
+            return f"PVOUT {pv} kWh/kWp/yr, wind {ws} m/s"
+        return "Off-raster"
+    return "Done"
