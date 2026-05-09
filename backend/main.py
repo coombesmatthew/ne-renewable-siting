@@ -23,10 +23,11 @@ from backend.routers import chat, parcel, repd, substation
 
 app = FastAPI(title="NE Renewable Siting API", version="0.1.0")
 
-# Vite dev (5173) and preview (4173). Production is same-origin.
+# Allow any localhost port for local dev (vite picks 5174, 5175 etc. when 5173 busy).
+# Production is same-origin so this regex doesn't loosen anything in prod.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:4173"],
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1):\d+$",
     allow_methods=["*"],
     allow_headers=["*"],
 )
