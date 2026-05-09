@@ -17,7 +17,7 @@ A common temptation when building a renewable-siting tool is to fold every input
 
 ## 2. The parcel attribute layer
 
-The canonical parcel layer is `data/processed/parcels.geojson` — 33,969 INSPIRE Index Polygons ≥ 2 ha across the 12 NE England LADs, filtered from ~1.19 M raw INSPIRE features. Wave 5C reads this file, attaches the columns below, and writes `data/processed/parcels_attributed.geojson` alongside it.
+The canonical parcel layer is `data/processed/parcels.geojson` — 33,363 INSPIRE Index Polygons ≥ 2 ha across the 12 NE England LADs, filtered from ~1.19 M raw INSPIRE features. Wave 5C reads this file, attaches the columns below, and writes `data/processed/parcels_attributed.geojson` alongside it.
 
 Geometries are repaired with `shapely.make_valid` before any spatial work. GeometryCollections are reduced to their first polygonal part so `rasterio.mask.mask` and `geopandas.sjoin` keep working downstream.
 
@@ -92,9 +92,9 @@ The frontend dropdown filters on `tier` directly. Click any substation to see it
 
 ## 5. Listed buildings + scheduled monuments precomputation
 
-`constraints/listed-building.geojson` has 12,432 features and `constraints/scheduled-monument.geojson` has 1,412. At runtime these layers are too dense to spatially join against 33,969 parcels per filter change, and the constraints themselves are static. So the `intersects_listed` and `intersects_scheduled` flags are precomputed once in the ETL (`etl/attributes.py`) and baked into the parcel attribute table.
+`constraints/listed-building.geojson` has 12,432 features and `constraints/scheduled-monument.geojson` has 1,412. At runtime these layers are too dense to spatially join against 33,363 parcels per filter change, and the constraints themselves are static. So the `intersects_listed` and `intersects_scheduled` flags are precomputed once in the ETL (`etl/attributes.py`) and baked into the parcel attribute table.
 
-This trades ~70 KB of additional GeoJSON payload (two booleans × 33,969 features) for sub-millisecond filter performance on the client. The constraints layers themselves are still served as PMTiles for the user to toggle on visually — the precomputed flags are just for the parcel filter.
+This trades ~70 KB of additional GeoJSON payload (two booleans × 33,363 features) for sub-millisecond filter performance on the client. The constraints layers themselves are still served as PMTiles for the user to toggle on visually — the precomputed flags are just for the parcel filter.
 
 ---
 

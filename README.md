@@ -64,7 +64,7 @@ All free and open. License compatibility checked: OGL 3.0 or CC-BY 4.0 throughou
 |---|---|---|---|---|
 | NE England polygon (12 LADs) | ONS LAD Dec 2024 BGC | GeoJSON | OGL 3.0 | Dissolved clip mask. |
 | Local authority boundaries | ONS LAD Dec 2024 BGC | GeoJSON | OGL 3.0 | 12 features. |
-| INSPIRE Index Polygons (≥2 ha) | HM Land Registry | GML → GeoJSON | OGL 3.0 | 33,969 parcels across 12 LADs. Filtered from ~1.19 M raw to drop residential gardens. **No owner names** — INSPIRE does not include them. |
+| INSPIRE Index Polygons (≥2 ha) | HM Land Registry | GML → GeoJSON | OGL 3.0 | 33,363 parcels across 12 LADs. Filtered from ~1.19 M raw to drop residential gardens. **No owner names** — INSPIRE does not include them. |
 | NPg substation headroom | Northern Powergrid Opendatasoft | GeoJSON | OGL 3.0 | 185 polygons with firm capacity, gen/dem headroom, fault levels. |
 | NPg Embedded Capacity Register | Northern Powergrid Opendatasoft | GeoJSON | OGL 3.0 | 697 connected/queued generation points (≥1 MW + <1 MW combined). |
 | DESNZ REPD Q1 2026 | gov.uk | CSV → GeoJSON | OGL 3.0 | 572 NE projects. Solar PV (295), Battery (101), Wind Onshore (99), plus bio/AD/EfW/hydro/H2. |
