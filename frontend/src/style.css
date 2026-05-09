@@ -1144,3 +1144,45 @@ body.filter-open .maplibregl-ctrl-bottom-left {
 .filter-row .slider-row.inline {
   margin-top: 4px;
 }
+
+/* Footer link separator (between About and Methodology) */
+.footer-sep {
+  margin: 0 6px;
+  color: #aaa;
+}
+
+/* Markdown content rendered inside the doc modal — tighten margins,
+   make tables scrollable, decent typography for an info dump. */
+.modal-body h1, .modal-body h2 { margin-top: 18px; margin-bottom: 8px; }
+.modal-body h1:first-child, .modal-body h2:first-child { margin-top: 0; }
+.modal-body h3 { margin-top: 14px; margin-bottom: 4px; }
+.modal-body p { margin: 0 0 10px; line-height: 1.5; }
+.modal-body ul, .modal-body ol { margin: 0 0 10px; padding-left: 22px; }
+.modal-body li { margin-bottom: 4px; }
+.modal-body table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 8px 0 14px;
+  font-size: 13px;
+}
+.modal-body th {
+  background: #f0f3f7;
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid #d0d6dc;
+  font-weight: 600;
+}
+.modal-body td {
+  padding: 5px 10px;
+  border-bottom: 1px solid #ececec;
+  vertical-align: top;
+}
+.modal-body strong { font-weight: 600; color: #1a3552; }
+.modal-body code {
+  background: #f0f0f5;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.92em;
+}

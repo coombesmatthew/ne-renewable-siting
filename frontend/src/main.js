@@ -1538,30 +1538,48 @@ function hideInfoPanel() {
 }
 
 // ---------------------------------------------------------------------------
-// Methodology modal
+// Markdown doc modals (About + Methodology) — share one overlay element,
+// switch title + body content based on which footer link was clicked.
+// Markdown is rendered via marked + DOMPurify (same as the chat).
 // ---------------------------------------------------------------------------
 function wireMethodologyModal() {
-  const link = document.getElementById('methodology-link');
   const overlay = document.getElementById('modal-overlay');
   const closeBtn = document.getElementById('modal-close');
+  const titleEl = document.getElementById('modal-title');
   const body = document.getElementById('modal-body');
 
-  let loaded = false;
-  link.addEventListener('click', async (e) => {
-    e.preventDefault();
-    if (!loaded) {
-      try {
-        const res = await fetch('/methodology.md');
-        const text = await res.text();
-        body.innerHTML = `<pre>${escapeHtml(text)}</pre>`;
-        loaded = true;
-      } catch (err) {
-        body.innerHTML = '<p style="color:#c33">Failed to load methodology.</p>';
+  const cache = {}; // url -> rendered HTML string
+
+  const docs = [
+    { linkId: 'about-link', title: 'About', url: '/about.md' },
+    { linkId: 'methodology-link', title: 'Methodology', url: '/methodology.md' }
+  ];
+
+  for (const doc of docs) {
+    const link = document.getElementById(doc.linkId);
+    if (!link) continue;
+    link.addEventListener('click', async (e) => {
+      e.preventDefault();
+      titleEl.textContent = doc.title;
+      if (cache[doc.url]) {
+        body.innerHTML = cache[doc.url];
+      } else {
+        body.innerHTML = '<p style="color:#888">Loading…</p>';
+        try {
+          const res = await fetch(doc.url);
+          const text = await res.text();
+          const html = renderMarkdown(text);
+          cache[doc.url] = html;
+          body.innerHTML = html;
+        } catch (err) {
+          body.innerHTML = `<p style="color:#c33">Failed to load ${doc.title.toLowerCase()}.</p>`;
+        }
       }
-    }
-    overlay.classList.add('visible');
-    overlay.setAttribute('aria-hidden', 'false');
-  });
+      overlay.classList.add('visible');
+      overlay.setAttribute('aria-hidden', 'false');
+    });
+  }
+
   closeBtn.addEventListener('click', closeModal);
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) closeModal();
