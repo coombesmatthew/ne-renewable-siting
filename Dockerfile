@@ -1,15 +1,13 @@
-# syntax=docker/dockerfile:1.7
-#
 # Multi-stage build for NE Renewable Siting Tool.
 #   Stage 1: build the vite/MapLibre frontend -> dist/
-#   Stage 2: python:3.12-slim runtime with FastAPI + geopandas/rasterio,
-#            pre-converts the big GeoJSONs to GeoPackage for ~5-10x
-#            faster cold-start.
+#   Stage 2: convert big GeoJSONs -> GeoPackage (so the runtime image
+#            doesn't carry a 461 MB geojson layer that gets `rm`-ed later)
+#   Stage 3: python:3.12-slim runtime with FastAPI + geopandas/rasterio.
 #
-# The data-conversion + build-tool teardown happens in a single RUN so
-# the .geojson originals and GDAL build packages don't bloat earlier
-# layers (Docker layers are additive — `rm` in a later layer doesn't
-# shrink the parent).
+# Note: Railway's builder doesn't support BuildKit `--mount=type=bind`,
+# hence the dedicated conversion stage (instead of bind-mounting the
+# context). Only the resulting .gpkg files are COPYd into the runtime
+# image — Docker layer history doesn't see the original .geojsons.
 
 # ---------- Stage 1: build frontend ----------
 FROM node:20-alpine AS frontend-build
@@ -19,41 +17,67 @@ RUN npm ci --silent
 COPY frontend/ ./
 RUN npm run build
 
-# ---------- Stage 2: backend + data ----------
+
+# ---------- Stage 2: convert GeoJSONs -> GeoPackage ----------
+# Lightweight stage with just GDAL — no Python, no node.
+FROM debian:bookworm-slim AS data-convert
+RUN apt-get update && apt-get install -y --no-install-recommends gdal-bin \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY data/processed/parcels_attributed.geojson \
+     data/processed/ccod_ne.geojson \
+     data/processed/npg_headroom.geojson \
+     data/processed/npg_substations_points.geojson \
+     data/processed/repd.geojson \
+     ./
+# Convert each with a graceful fallback. If a single conversion fails we
+# leave the .geojson alongside so data_store.py's loader can fall back.
+RUN set -eu; \
+    mkdir -p /out; \
+    for f in parcels_attributed ccod_ne npg_headroom npg_substations_points repd; do \
+        if [ ! -f "/src/${f}.geojson" ]; then \
+            echo "[convert] WARN: ${f}.geojson missing, skipping"; continue; \
+        fi; \
+        if ogr2ogr -f GPKG "/out/${f}.gpkg" "/src/${f}.geojson"; then \
+            echo "[convert] ${f}.geojson -> ${f}.gpkg"; \
+        else \
+            echo "[convert] WARN: ${f} conversion failed, copying geojson"; \
+            cp "/src/${f}.geojson" "/out/${f}.geojson"; \
+        fi; \
+    done
+
+
+# ---------- Stage 3: backend runtime ----------
 FROM python:3.12-slim AS runtime
 
-# System deps. We install gdal-bin (runtime) up front. The compiler
-# toolchain + libgdal-dev are installed temporarily inside the data
-# conversion RUN so they don't bloat the final image.
+# Runtime GDAL is needed for rasterio/pyogrio. build-essential +
+# libgdal-dev are only needed during `uv sync` to compile some wheels —
+# purge in the same RUN so they don't persist as a layer.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         gdal-bin \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv (fast Python package manager)
+# Install uv (fast Python package manager).
 COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# Python project metadata + source dirs (hatchling build-editable needs
-# README.md and the package dirs to exist when ``uv sync`` runs).
+# Python project metadata + source. hatchling build-editable needs
+# README.md and the package dirs to exist when uv sync runs.
 COPY pyproject.toml uv.lock README.md ./
 COPY backend/ ./backend/
 COPY etl/ ./etl/
 
-# Install Python deps. Build-essential is needed for some wheels (e.g.
-# fiona) on arm64; remove it in the same layer so we don't ship it.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libgdal-dev \
     && uv sync --frozen --no-dev \
     && apt-get purge -y --auto-remove build-essential libgdal-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Frontend dist from stage 1
+# Frontend dist from stage 1.
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
-# Data files — only what the backend actually needs at runtime.
-# Stage them in /tmp/data-src so the conversion RUN can replace big
-# GeoJSONs with GeoPackage equivalents in a single layer.
+# Data manifests + small support files.
 COPY data/data_manifest.json ./data/data_manifest.json
 COPY data/ne_england.geojson ./data/ne_england.geojson
 COPY data/processed/parcels.manifest.json ./data/processed/parcels.manifest.json
@@ -64,25 +88,9 @@ COPY data/processed/repd.manifest.json ./data/processed/repd.manifest.json
 COPY data/raw/solar_pvout.tif ./data/raw/solar_pvout.tif
 COPY data/raw/wind_speed_100m.tif ./data/raw/wind_speed_100m.tif
 
-# Convert big GeoJSONs to GeoPackage. The geojson sources are bind-mounted
-# from the build context (BuildKit), so the originals never become a
-# layer in the final image — only the resulting .gpkg files persist.
-# If a conversion fails we copy the .geojson out of the bind mount so
-# data_store.py's fallback path still has something to read.
-RUN --mount=type=bind,source=data/processed,target=/tmp/data-src,readonly \
-    set -eu \
-    && for f in parcels_attributed ccod_ne npg_headroom npg_substations_points repd; do \
-         src="/tmp/data-src/${f}.geojson"; \
-         if [ ! -f "$src" ]; then \
-           echo "[docker] WARN: $src missing, skipping"; continue; \
-         fi; \
-         if ogr2ogr -f GPKG "/app/data/processed/${f}.gpkg" "$src"; then \
-           echo "[docker] converted ${f}.geojson -> ${f}.gpkg"; \
-         else \
-           echo "[docker] WARN: ${f} conversion failed, falling back to geojson"; \
-           cp "$src" "/app/data/processed/${f}.geojson"; \
-         fi; \
-       done
+# Pre-converted .gpkg files from stage 2. Only converted artefacts (not
+# the source .geojsons) end up in this image's history.
+COPY --from=data-convert /out/ ./data/processed/
 
 # Railway sets PORT at runtime.
 ENV PORT=8000
