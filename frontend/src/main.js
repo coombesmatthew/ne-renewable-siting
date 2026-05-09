@@ -529,6 +529,7 @@ function buildFilterRow(map, spec) {
   const f = state.filters[spec.id];
   const wrap = document.createElement('div');
   wrap.className = 'filter-row';
+  if (spec.kind === 'slider+select') wrap.classList.add('has-select');
   wrap.dataset.filterId = spec.id;
   wrap.classList.toggle('enabled', f.enabled);
 

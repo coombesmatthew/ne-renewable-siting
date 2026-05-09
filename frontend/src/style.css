@@ -636,8 +636,20 @@ body.filter-open .maplibregl-ctrl-bottom-left {
   color: #1f5e2e;
 }
 .filter-row {
-  padding: 6px 0;
-  border-bottom: 1px dashed #e6e6e6;
+  /* Each filter row is the same height so the panel reads as a uniform list,
+     regardless of whether the row has a slider, a label that wraps, or an
+     extra select dropdown (voltage tier). 64px = label line + slider line
+     stacked, with breathing room. The voltage row gets an exception (.has-select)
+     because it carries a real second control. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 60px;
+  padding: 8px 0;
+  border-bottom: 1px solid #ececec;
+}
+.filter-row.has-select {
+  min-height: 86px;
 }
 .filter-row:last-child {
   border-bottom: none;
