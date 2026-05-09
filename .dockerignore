@@ -1,0 +1,70 @@
+# Version control / IDE
+.git
+.gitignore
+.vscode
+.idea
+.claude
+.cursor
+
+# Python
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov/
+*.egg-info
+
+# Node / frontend (we build from clean source in stage 1)
+node_modules
+frontend/node_modules
+frontend/dist
+
+# Tile artefacts (served from R2/Cloudflare, not from the API container)
+data/pmtiles/
+
+# Constraints folder is large and the backend doesn't read it directly
+data/processed/constraints/
+
+# Raw data we don't need in the runtime image. The Dockerfile explicitly
+# COPYs solar_pvout.tif and wind_speed_100m.tif, so do NOT exclude the
+# whole data/raw directory — list unwanted files individually.
+data/raw/inspire/
+data/raw/solar_uk_bundle.zip
+data/raw/solar_pvout_uk.tif
+data/raw/GBR_wind-speed_100m.tif
+data/raw/bua_2022_gb.geojson
+data/raw/ons_lad_dec2024_bgc.geojson
+data/raw/repd_q1_2026.csv
+data/raw/ccod_ne_raw.csv
+data/raw/postcode_geocode.json
+data/raw/npg_*.geojson
+data/raw/planning_*.geojson
+
+# Processed bundles we don't need at runtime
+data/processed/parcels.geojson
+data/processed/la_boundaries.geojson
+data/processed/npg_ecr.geojson
+data/processed/npg_ecr.manifest.json
+data/processed/solar.manifest.json
+data/processed/wind.manifest.json
+
+# Secrets / env (set on Railway dashboard)
+.env
+.env.*
+!.env.example
+
+# Misc
+.DS_Store
+*.log
+docs/
+plan/
+**/*.md
+!README.md
+!LICENSE
+docker-compose.yml

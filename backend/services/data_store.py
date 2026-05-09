@@ -50,6 +50,35 @@ def _data_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent / "data"
 
 
+# Logical layer name -> filename stem on disk. Most layers share the same
+# name as their stem; ``parcels`` is the exception because the file is
+# ``parcels_attributed`` while the in-memory layer is just ``parcels``.
+_LAYER_STEMS: dict[str, str] = {
+    "parcels": "parcels_attributed",
+    "npg_headroom": "npg_headroom",
+    "npg_substations_points": "npg_substations_points",
+    "repd": "repd",
+    "ccod_ne": "ccod_ne",
+}
+
+
+def _read_layer(name: str, root: Path) -> gpd.GeoDataFrame:
+    """Read a processed layer, preferring ``.gpkg`` over ``.geojson``.
+
+    GeoPackage is ~5-10x faster to read and ~30% the on-disk size of the
+    equivalent GeoJSON, so we use it when available. The Dockerfile
+    converts the big GeoJSONs at build time; local dev still works
+    because we fall back to the original ``.geojson``.
+    """
+
+    stem = _LAYER_STEMS.get(name, name)
+    processed = root / "processed"
+    gpkg = processed / f"{stem}.gpkg"
+    if gpkg.exists():
+        return gpd.read_file(gpkg, engine="pyogrio")
+    return gpd.read_file(processed / f"{stem}.geojson", engine="pyogrio")
+
+
 @lru_cache(maxsize=1)
 def get_data_store() -> DataStore:
     """Load all datasets once and return a frozen :class:`DataStore`.
@@ -59,16 +88,13 @@ def get_data_store() -> DataStore:
     """
 
     root = _data_root()
-    processed = root / "processed"
     raw = root / "raw"
 
-    parcels = gpd.read_file(processed / "parcels_attributed.geojson", engine="pyogrio")
-    substation_catchments = gpd.read_file(processed / "npg_headroom.geojson", engine="pyogrio")
-    substation_points = gpd.read_file(
-        processed / "npg_substations_points.geojson", engine="pyogrio"
-    )
-    repd = gpd.read_file(processed / "repd.geojson", engine="pyogrio")
-    ccod = gpd.read_file(processed / "ccod_ne.geojson", engine="pyogrio")
+    parcels = _read_layer("parcels", root)
+    substation_catchments = _read_layer("npg_headroom", root)
+    substation_points = _read_layer("npg_substations_points", root)
+    repd = _read_layer("repd", root)
+    ccod = _read_layer("ccod_ne", root)
 
     # Build a spatial index on parcels up-front so /api/parcel/at is fast.
     _ = parcels.sindex
