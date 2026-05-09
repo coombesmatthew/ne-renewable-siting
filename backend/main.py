@@ -15,11 +15,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
 from fastapi import FastAPI  # pyright: ignore[reportMissingImports]
 from fastapi.middleware.cors import CORSMiddleware  # pyright: ignore[reportMissingImports]
 from fastapi.staticfiles import StaticFiles  # pyright: ignore[reportMissingImports]
 
-from backend.routers import chat, parcel, repd, substation
+# Load .env early so ANTHROPIC_API_KEY etc. are available before any router imports.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+from backend.routers import chat, parcel, repd, substation  # noqa: E402
 
 app = FastAPI(title="NE Renewable Siting API", version="0.1.0")
 
