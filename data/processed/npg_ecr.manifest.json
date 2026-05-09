@@ -5,7 +5,7 @@
     "https://northernpowergrid.opendatasoft.com/api/explore/v2.1/catalog/datasets/embedded-capacity-register-part-2/exports/geojson"
   ],
   "license": "OGL 3.0",
-  "last_updated": "2026-05-07",
+  "last_updated": "2026-05-09",
   "feature_count": 697,
   "file_size_bytes": 2140633,
   "properties_keys": [

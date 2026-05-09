@@ -18,14 +18,22 @@ env/
 .env
 .env.local
 
-# Data — raw + processed are gitignored, but commit data/ne_england.geojson
-data/raw/
-data/processed/
+# Data — most raw + processed data is gitignored. Allow-list the small
+# files the FastAPI backend needs at runtime so they ship in the GitHub
+# repo (and therefore Railway's build context). Big GeoJSONs (parcels,
+# ccod) come from R2 at Docker build time — see Dockerfile.
+data/raw/*
+data/processed/*
 data/pmtiles/
 !data/ne_england.geojson
 !data/data_manifest.json
-!data/processed/
 !data/processed/la_boundaries.geojson
+!data/processed/*.manifest.json
+!data/processed/npg_headroom.geojson
+!data/processed/npg_substations_points.geojson
+!data/processed/repd.geojson
+!data/raw/solar_pvout.tif
+!data/raw/wind_speed_100m.tif
 
 # OS
 .DS_Store
