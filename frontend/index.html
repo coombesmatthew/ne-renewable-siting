@@ -14,18 +14,14 @@
           <button type="button" class="seg-btn active" data-mode="develop" role="tab" aria-selected="true">Develop</button>
           <button type="button" class="seg-btn" data-mode="acquire" role="tab" aria-selected="false">Acquire</button>
         </div>
-        <button type="button" class="filters-btn" id="filters-btn" aria-controls="filter-panel">
-          <span class="filters-icon" aria-hidden="true"></span>Filters
-        </button>
       </div>
     </div>
 
     <div id="map"></div>
 
-    <aside id="filter-panel" aria-hidden="true">
+    <aside id="filter-panel" class="visible always-on" aria-hidden="false">
       <div class="filter-panel-header">
         <span class="filter-panel-title" id="filter-panel-title">Develop &middot; Solar</span>
-        <button type="button" id="filter-panel-close" aria-label="Close filters">&times;</button>
       </div>
       <div class="filter-panel-body" id="filter-panel-body"></div>
     </aside>
