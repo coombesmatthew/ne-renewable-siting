@@ -416,6 +416,9 @@ function wireTopbar(map) {
         if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
       });
       renderFilterPanel(map);
+      // Always open the filter panel when switching modes so the user sees
+      // the relevant filter UI (Develop = parcel filters, Acquire = REPD chips).
+      if (window._setFilterPanelOpen) window._setFilterPanelOpen(true);
       if (newMode === 'develop') {
         applyParcelStyling(map);
         REPD_TECHS.forEach((tech) => {
@@ -436,18 +439,23 @@ function wireTopbar(map) {
   const filterPanel = document.getElementById('filter-panel');
   const closeBtn = document.getElementById('filter-panel-close');
 
-  filtersBtn.addEventListener('click', () => {
-    const open = filterPanel.classList.toggle('visible');
+  // Helper used to open / close the filter panel from anywhere.
+  const setPanelOpen = (open) => {
+    filterPanel.classList.toggle('visible', open);
     filtersBtn.classList.toggle('active', open);
     document.body.classList.toggle('filter-open', open);
     filterPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+  };
+  // Expose so the mode-toggle handler can re-open after a switch.
+  window._setFilterPanelOpen = setPanelOpen;
+
+  filtersBtn.addEventListener('click', () => {
+    setPanelOpen(!filterPanel.classList.contains('visible'));
   });
-  closeBtn.addEventListener('click', () => {
-    filterPanel.classList.remove('visible');
-    filtersBtn.classList.remove('active');
-    document.body.classList.remove('filter-open');
-    filterPanel.setAttribute('aria-hidden', 'true');
-  });
+  closeBtn.addEventListener('click', () => setPanelOpen(false));
+
+  // Open the panel on first load so the filter UI is visible by default.
+  setPanelOpen(true);
 }
 
 function updatePanelTitle() {
