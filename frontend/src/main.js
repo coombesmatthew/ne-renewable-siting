@@ -156,6 +156,7 @@ async function boot() {
     wireMethodologyModal();
     bindMapMoveLive(map);
     wireChat();
+    wireParcelSearch(map);
   });
 
   window._map = map;
@@ -1714,6 +1715,70 @@ function escapeHtml(s) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// ---------------------------------------------------------------------------
+// Parcel ID search — topbar input. Type "NE-021432" → flies to that parcel
+// and opens the info panel. Forgiving on input format (case-insensitive,
+// allows missing prefix, strips whitespace).
+// ---------------------------------------------------------------------------
+function wireParcelSearch(map) {
+  const form = document.getElementById('parcel-search-form');
+  const input = document.getElementById('parcel-search-input');
+  const status = document.getElementById('parcel-search-status');
+  if (!form || !input) return;
+
+  const setStatus = (msg, kind = 'info') => {
+    status.textContent = msg;
+    status.className = `parcel-search-status ${kind}`;
+  };
+
+  const normalize = (raw) => {
+    let s = String(raw || '').trim().toUpperCase();
+    if (!s) return '';
+    if (/^\d+$/.test(s)) s = `NE-${s.padStart(6, '0')}`;
+    if (/^NE\d+$/.test(s)) s = s.replace(/^NE/, 'NE-');
+    return s;
+  };
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = normalize(input.value);
+    if (!id) {
+      setStatus('Type a parcel ID', 'warn');
+      return;
+    }
+    setStatus('searching…', 'info');
+    try {
+      const resp = await fetch(`${API_BASE}/api/parcel/${encodeURIComponent(id)}`);
+      if (resp.status === 404) {
+        setStatus(`No parcel ${id}`, 'warn');
+        return;
+      }
+      if (!resp.ok) {
+        setStatus(`Error ${resp.status}`, 'warn');
+        return;
+      }
+      const p = await resp.json();
+      if (!Number.isFinite(p.centroid_lon) || !Number.isFinite(p.centroid_lat)) {
+        setStatus(`Parcel ${id} has no centroid`, 'warn');
+        return;
+      }
+      // Fly to the parcel and pop the info panel.
+      map.flyTo({
+        center: [p.centroid_lon, p.centroid_lat],
+        zoom: 14,
+        speed: 1.4
+      });
+      setStatus(`Found ${id}`, 'ok');
+      // Open the existing parcel info panel using the same renderer click uses.
+      showInfoPanel(_renderParcel(p));
+      input.select();
+    } catch (err) {
+      setStatus(`Network error`, 'warn');
+      console.error('parcel search failed:', err);
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

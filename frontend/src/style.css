@@ -959,3 +959,44 @@ body.filter-open .maplibregl-ctrl-bottom-left {
   color: #b00020;
   margin-top: 4px;
 }
+
+/* Parcel search bar (topbar) */
+#parcel-search-form {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #c8d0d8;
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+  margin-left: 8px;
+}
+#parcel-search-input {
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 10px;
+  width: 220px;
+  color: #222;
+  background: transparent;
+}
+#parcel-search-input::placeholder { color: #999; }
+#parcel-search-btn {
+  background: #1a5fa7;
+  color: #fff;
+  border: none;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+#parcel-search-btn:hover { background: #154e8a; }
+#parcel-search-status {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #666;
+  min-width: 130px;
+}
+#parcel-search-status.ok { color: #1f7a1f; }
+#parcel-search-status.warn { color: #b04a00; }

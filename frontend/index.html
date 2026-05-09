@@ -14,6 +14,17 @@
           <button type="button" class="seg-btn active" data-mode="develop" role="tab" aria-selected="true">Develop</button>
           <button type="button" class="seg-btn" data-mode="acquire" role="tab" aria-selected="false">Acquire</button>
         </div>
+        <form id="parcel-search-form" role="search">
+          <input
+            type="text"
+            id="parcel-search-input"
+            placeholder="Search parcel ID, e.g. NE-021432"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button type="submit" id="parcel-search-btn" aria-label="Search">Go</button>
+        </form>
+        <span id="parcel-search-status" aria-live="polite"></span>
       </div>
     </div>
 
