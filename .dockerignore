@@ -67,4 +67,7 @@ plan/
 **/*.md
 !README.md
 !LICENSE
+# Doc markdowns served by the frontend modal (About / Methodology) need
+# to make it into the build context so vite can bundle them into dist/.
+!frontend/public/*.md
 docker-compose.yml
