@@ -64,6 +64,23 @@
       </div>
     </div>
 
+    <div id="chat-widget">
+      <button id="chat-toggle" type="button" aria-label="Open AI assistant" title="Ask the map">
+        <span class="chat-icon" aria-hidden="true">&#128172;</span>
+      </button>
+      <aside id="chat-panel" aria-hidden="true">
+        <div class="chat-header">
+          <span class="chat-title">Map assistant</span>
+          <button id="chat-close" type="button" aria-label="Close chat">&times;</button>
+        </div>
+        <div id="chat-messages"></div>
+        <form id="chat-form">
+          <input type="text" id="chat-input" placeholder="Ask about parcels, substations, REPD&hellip;" autocomplete="off" />
+          <button type="submit" id="chat-send" aria-label="Send">Send</button>
+        </form>
+      </aside>
+    </div>
+
     <footer id="footer">
       <span class="attribution">
         Data: NPg, DESNZ REPD, Global Solar/Wind Atlas, planning.data.gov.uk, ONS, HM Land Registry INSPIRE

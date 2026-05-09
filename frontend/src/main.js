@@ -145,6 +145,7 @@ async function boot() {
     applyParcelStyling(map);
     wireMethodologyModal();
     bindMapMoveLive(map);
+    wireChat();
   });
 
   window._map = map;
@@ -1478,6 +1479,133 @@ function wireMethodologyModal() {
     overlay.classList.remove('visible');
     overlay.setAttribute('aria-hidden', 'true');
   }
+}
+
+// ---------------------------------------------------------------------------
+// Chat widget (floating, SSE streaming)
+// ---------------------------------------------------------------------------
+const API_BASE =
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE) ||
+  (location.port === '5173' ? 'http://localhost:8000' : '');
+
+async function sendChat(messages, onChunk, onDone) {
+  let resp;
+  try {
+    resp = await fetch(`${API_BASE}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages }),
+    });
+  } catch (err) {
+    onChunk(`Error: ${err.message || 'network failure'}`);
+    onDone();
+    return;
+  }
+  if (!resp.ok || !resp.body) {
+    onChunk(`Error: ${resp.status}`);
+    onDone();
+    return;
+  }
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const payload = line.slice(6).trim();
+      if (payload === '[DONE]') {
+        onDone();
+        return;
+      }
+      try {
+        const parsed = JSON.parse(payload);
+        if (parsed.text) onChunk(parsed.text);
+        if (parsed.error) {
+          onChunk(`Error: ${parsed.error}`);
+          onDone();
+          return;
+        }
+      } catch {
+        // ignore malformed JSON chunk
+      }
+    }
+  }
+  onDone();
+}
+
+function wireChat() {
+  const toggle = document.getElementById('chat-toggle');
+  const panel = document.getElementById('chat-panel');
+  const closeBtn = document.getElementById('chat-close');
+  const form = document.getElementById('chat-form');
+  const input = document.getElementById('chat-input');
+  const messagesEl = document.getElementById('chat-messages');
+  const sendBtn = document.getElementById('chat-send');
+  if (!toggle || !panel || !form || !input || !messagesEl) return;
+
+  const history = [];
+  let firstOpen = true;
+
+  const open = () => {
+    panel.classList.add('visible');
+    panel.setAttribute('aria-hidden', 'false');
+    if (firstOpen) {
+      addMessage(
+        'assistant',
+        'Ask me about parcels, substations, or REPD projects in NE England. Try: "Show me operational solar farms over 5 MW in Durham" or "What\'s the wind speed at -2.0, 55.3?".'
+      );
+      firstOpen = false;
+    }
+    setTimeout(() => input.focus(), 50);
+  };
+  const close = () => {
+    panel.classList.remove('visible');
+    panel.setAttribute('aria-hidden', 'true');
+  };
+  toggle.addEventListener('click', () =>
+    panel.classList.contains('visible') ? close() : open()
+  );
+  closeBtn.addEventListener('click', close);
+
+  function addMessage(role, text) {
+    const el = document.createElement('div');
+    el.className = `chat-message chat-message-${role}`;
+    el.textContent = text;
+    messagesEl.appendChild(el);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return el;
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const userText = input.value.trim();
+    if (!userText) return;
+    input.value = '';
+    addMessage('user', userText);
+    history.push({ role: 'user', content: userText });
+
+    const assistantEl = addMessage('assistant', '');
+    let assistantText = '';
+    sendBtn.disabled = true;
+    await sendChat(
+      history,
+      (chunk) => {
+        assistantText += chunk;
+        assistantEl.textContent = assistantText;
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      },
+      () => {
+        history.push({ role: 'assistant', content: assistantText });
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    );
+  });
 }
 
 // ---------------------------------------------------------------------------
