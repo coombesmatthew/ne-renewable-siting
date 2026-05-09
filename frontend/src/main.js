@@ -486,7 +486,7 @@ const FILTER_SPECS = [
   { id: 'minPvout',     section: 'Resource',  label: 'Min Solar PVOUT',                  unit: 'kWh/kWp/yr', kind: 'slider', min: 800, max: 1000, step: 1,   fmt: (v) => v.toFixed(0) },
   { id: 'minWind',      section: 'Resource',  label: 'Min wind speed @ 100 m',           unit: 'm/s',        kind: 'slider', min: 5,   max: 13,   step: 0.1, fmt: (v) => v.toFixed(1) },
   // Grid — gen-headroom distance with required-voltage tier dropdown.
-  { id: 'maxDistGenHr', section: 'Grid',      label: 'Max dist to gen-headroom sub at min voltage', unit: 'km', kind: 'slider+select', min: 1, max: 80, step: 1, fmt: (v) => v.toFixed(0),
+  { id: 'maxDistGenHr', section: 'Grid',      label: 'Max distance to gen-headroom sub', unit: 'km', kind: 'slider+select', min: 1, max: 80, step: 1, fmt: (v) => v.toFixed(0),
     selectKey: 'voltage', selectLabel: 'Min voltage',
     selectOptions: [
       { value: '11',  label: '≥ 11 kV (any)' },
@@ -495,7 +495,7 @@ const FILTER_SPECS = [
       { value: '66',  label: '≥ 66 kV (large utility)' },
       { value: '132', label: '≥ 132 kV (GSP)' }
     ] },
-  { id: 'maxDistAnyHr', section: 'Grid',      label: 'Max dist to any-headroom sub (battery-style)', unit: 'km', kind: 'slider', min: 1, max: 50, step: 1, fmt: (v) => v.toFixed(0) },
+  { id: 'maxDistAnyHr', section: 'Grid',      label: 'Max distance to any-headroom sub', unit: 'km', kind: 'slider', min: 1, max: 50, step: 1, fmt: (v) => v.toFixed(0) },
   { id: 'minArea',      section: 'Other',     label: 'Min parcel area',                  unit: 'ha',         kind: 'slider', min: 2,   max: 100,  step: 1,   fmt: (v) => v.toFixed(0) },
   // Constraint distance filters — sliders 0..20 km. 0 km = "exclude intersecting".
   { id: 'minDistAonb',     section: 'Constraints',  label: 'Min distance from AONB',                unit: 'km', kind: 'slider', min: 0, max: 20, step: 0.5, fmt: (v) => v.toFixed(1), swatch: '#88dd88' },

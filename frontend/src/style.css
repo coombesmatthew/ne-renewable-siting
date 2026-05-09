@@ -1123,3 +1123,24 @@ body.filter-open .maplibregl-ctrl-bottom-left {
   white-space: nowrap;
   vertical-align: top;
 }
+
+/* ---- Filter row uniformity v2: match Constraints' rhythm everywhere ---- */
+.filter-row {
+  /* All sliders rows render exactly the same shape: label line + slider line. */
+  min-height: 48px;
+  padding: 5px 0;
+}
+.filter-row.has-select {
+  min-height: 78px;
+}
+.filter-row .filter-label {
+  /* Stop long labels from wrapping to a second line — that's what made
+     Resource/Grid rows visibly taller than Constraints rows. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+.filter-row .slider-row.inline {
+  margin-top: 4px;
+}
