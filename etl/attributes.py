@@ -48,7 +48,7 @@ import shapely
 from rasterio.mask import mask
 from scipy.spatial import cKDTree
 
-from etl.config import DATA_PROCESSED, DATA_RAW
+from etl.config import DATA_PROCESSED, DATA_RAW, NE_POLYGON_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -470,6 +470,18 @@ def attach_parcel_attributes() -> Path:
     # Sanity: enforce bool dtype for the intersects_* columns.
     for col in constraint_columns:
         gdf[col] = gdf[col].astype(bool)
+
+    # Final clip to the canonical NE polygon — drops parcels whose
+    # representative point is outside (per-LAD INSPIRE files include some
+    # parcels that straddle a LAD boundary slightly past the dissolved NE
+    # outline). About 1.8% of parcels removed.
+    ne_mask = gpd.read_file(NE_POLYGON_PATH, engine="pyogrio").iloc[0].geometry
+    rp = gdf.geometry.representative_point()
+    in_ne = rp.within(ne_mask)
+    n_dropped = int((~in_ne).sum())
+    if n_dropped:
+        logger.info("Dropped %d parcels outside NE polygon (kept %d)", n_dropped, int(in_ne.sum()))
+        gdf = gdf.loc[in_ne].copy()
 
     t0 = time.perf_counter()
     logger.info("Writing attributed GeoJSON -> %s", output_path)

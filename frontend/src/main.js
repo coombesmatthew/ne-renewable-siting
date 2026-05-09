@@ -14,7 +14,7 @@ maplibregl.addProtocol('pmtiles', protocol.tile);
 // Total parcel count baked into manifest at ETL time. Used for the live
 // "X of N match" badge. We don't recompute it from tiles because tiles only
 // expose the visible viewport.
-const TOTAL_PARCELS = 33969;
+const TOTAL_PARCELS = 33363;
 
 // Filter spec — each key maps to a parcel attribute / spatial test.
 // The `enabled` flag is the master toggle for that filter; `value` is the

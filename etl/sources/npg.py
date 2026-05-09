@@ -259,13 +259,15 @@ def download_headroom() -> Path:
     gdf = _ensure_target_crs(gdf)
     gdf, _ = _fix_invalid_geoms(gdf)
 
-    # No polygon clip — the full NPg dataset covers neighbouring Yorkshire too,
-    # which is useful context for projects on the regional border. The frontend
-    # only renders what's in the viewport at any zoom, so showing the full
-    # dataset doesn't add visual clutter to the NE-zoomed default view.
-    clipped = gdf
+    # Clip to NE polygon — the authoritative NPg file covers both NE + Yorkshire
+    # licence areas (683 stations); the demo is NE-focused so we only keep the
+    # ~171 stations whose catchment intersects the NE polygon.
+    mask = _load_ne_mask()
+    logger.info("Clipping to NE England polygon…")
+    clipped = gpd.clip(gdf, mask)
+    clipped = clipped[~clipped.geometry.is_empty & clipped.geometry.notna()].copy()
     clipped, _ = _fix_invalid_geoms(clipped)
-    logger.info("Heatmap: %d features (no NE clip — using authoritative full set)", len(clipped))
+    logger.info("Heatmap: %d -> %d features after NE clip", raw_count, len(clipped))
 
     # Add voltage_tier — used by the frontend to render 5 distinct layers.
     if "pvoltage" in clipped.columns:
