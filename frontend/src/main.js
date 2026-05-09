@@ -287,13 +287,28 @@ function buildStyle(urls) {
         layout: { visibility: 'none' },
         paint: { 'fill-color': '#aa6688', 'fill-opacity': 0.4 }
       },
+      // Listed buildings are 99% Point features (only ~113 of 12,432 have a
+      // polygon footprint) — render as small circles so they're actually
+      // visible. The 113 polygons end up represented at their centroid; an
+      // acceptable trade-off given how dominant points are.
       {
         id: 'constraint-listed-building',
-        type: 'fill',
+        type: 'circle',
         source: 'constraints',
         'source-layer': 'listed_building',
         layout: { visibility: 'none' },
-        paint: { 'fill-color': '#bb6688', 'fill-opacity': 0.3 }
+        paint: {
+          'circle-color': '#bb6688',
+          'circle-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            8, 1.5,
+            12, 3,
+            14, 5
+          ],
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 0.5,
+          'circle-opacity': 0.7
+        }
       },
 
       // Substations — split into 5 voltage tiers (132/66/33/20/11 kV) so the user
