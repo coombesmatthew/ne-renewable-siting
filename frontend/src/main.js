@@ -755,7 +755,9 @@ function buildLayerToggles(map) {
   };
 
   const buildGroup = (title, items, opts = {}) => {
-    const sec = section(title, { collapsible: true, collapsed: opts.collapsed ?? false });
+    // Layer groups are always-on (no collapse). Headers stay readable;
+    // master toggle in the heading still flips all items in the group.
+    const sec = section(title, { collapsible: false });
 
     // Master toggle in the section header — flips all items in the group
     // on/off at once. Reflects mixed/all-on/all-off via tri-state checkbox
@@ -855,7 +857,7 @@ function buildLayerToggles(map) {
     { id: 'parcels-fill', label: 'Developable parcels (≥2 ha)', swatch: '#4a90e2' },
     { id: 'solar-raster', label: 'Solar PVOUT raster', swatch: '#f4c542' },
     { id: 'wind-raster', label: 'Wind speed raster', swatch: '#80b3d3' }
-  ], { collapsed: true }));
+  ]));
 
   return wrap;
 }
