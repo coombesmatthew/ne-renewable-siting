@@ -109,6 +109,18 @@ def _row_to_substation(row: Any) -> Substation:
     )
 
 
+def _search_substations(df, q: str, limit: int = 10) -> list[Substation]:
+    """Pure substring search helper — used by the HTTP endpoint and the
+    Claude ``search_substations`` tool. Returns a list of
+    :class:`Substation` (already serialisable via ``model_dump``)."""
+
+    if not q:
+        return []
+    mask = df["name"].astype(str).str.contains(q, case=False, na=False)
+    hits = df[mask].head(limit)
+    return [_row_to_substation(r) for _, r in hits.iterrows()]
+
+
 @router.get("/search", response_model=SubstationSearchResults)
 def search_substations(
     q: str = Query(..., min_length=1, description="Substring to match against name"),
@@ -117,10 +129,7 @@ def search_substations(
     """Case-insensitive substring search by substation name."""
 
     store = get_data_store()
-    df = store.substation_catchments
-    mask = df["name"].astype(str).str.contains(q, case=False, na=False)
-    hits = df[mask].head(limit)
-    results = [_row_to_substation(r) for _, r in hits.iterrows()]
+    results = _search_substations(store.substation_catchments, q, limit)
     return SubstationSearchResults(query=q, count=len(results), results=results)
 
 

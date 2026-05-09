@@ -94,6 +94,36 @@ def _row_to_parcel(row) -> Parcel:
     )
 
 
+def _find_parcel_at(parcels, lng: float, lat: float):
+    """Return the parcel row containing ``(lng, lat)`` or ``None``.
+
+    Reusable helper used by both the HTTP endpoint and the Claude
+    ``get_parcel`` tool.
+    """
+
+    pt = Point(lng, lat)
+    sindex = parcels.sindex
+    candidate_idx = list(sindex.query(pt, predicate="intersects"))
+    if not candidate_idx:
+        return None
+    candidates = parcels.iloc[candidate_idx]
+    hits = candidates[candidates.geometry.contains(pt)]
+    if hits.empty:
+        hits = candidates[candidates.geometry.intersects(pt)]
+    if hits.empty:
+        return None
+    return hits.iloc[0]
+
+
+def _find_by_id(parcels, parcel_id: str):
+    """Return the parcel row matching ``parcel_id`` or ``None``."""
+
+    matches = parcels[parcels["parcel_id"] == parcel_id]
+    if matches.empty:
+        return None
+    return matches.iloc[0]
+
+
 @router.get("/at", response_model=Parcel)
 def parcel_at(
     lng: float = Query(..., ge=-180, le=180, description="Longitude (WGS84)"),
@@ -106,21 +136,10 @@ def parcel_at(
     """
 
     store = get_data_store()
-    pt = Point(lng, lat)
-    sindex = store.parcels.sindex
-    candidate_idx = list(sindex.query(pt, predicate="intersects"))
-    if not candidate_idx:
+    row = _find_parcel_at(store.parcels, lng, lat)
+    if row is None:
         raise HTTPException(status_code=404, detail="No parcel at that location")
-
-    candidates = store.parcels.iloc[candidate_idx]
-    hits = candidates[candidates.geometry.contains(pt)]
-    if hits.empty:
-        # Fall back to intersects (handles edge-on-boundary cases).
-        hits = candidates[candidates.geometry.intersects(pt)]
-    if hits.empty:
-        raise HTTPException(status_code=404, detail="No parcel at that location")
-
-    return _row_to_parcel(hits.iloc[0])
+    return _row_to_parcel(row)
 
 
 @router.get("/{parcel_id}", response_model=Parcel)
@@ -131,7 +150,7 @@ def get_parcel(parcel_id: str) -> Parcel:
     """
 
     store = get_data_store()
-    matches = store.parcels[store.parcels["parcel_id"] == parcel_id]
-    if matches.empty:
+    row = _find_by_id(store.parcels, parcel_id)
+    if row is None:
         raise HTTPException(status_code=404, detail=f"Parcel {parcel_id!r} not found")
-    return _row_to_parcel(matches.iloc[0])
+    return _row_to_parcel(row)

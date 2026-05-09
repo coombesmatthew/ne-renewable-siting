@@ -113,6 +113,59 @@ def _row_to_project(row: Any) -> RepdProject:
     )
 
 
+def _filter_repd(
+    df,
+    tech: Optional[list[str]] = None,
+    status: Optional[list[str]] = None,
+    min_capacity_mw: Optional[float] = None,
+    max_capacity_mw: Optional[float] = None,
+    bbox: Optional[str] = None,
+    limit: int = 50,
+    **_unused: Any,
+) -> dict[str, Any]:
+    """Pure filtering helper — shared by the HTTP endpoint and the
+    Claude ``search_repd`` tool. Returns a JSON-friendly dict matching
+    :class:`RepdSearchResults`.
+
+    Unknown kwargs are silently ignored so that the Claude tool can
+    pass through whatever the model decided to include.
+    """
+
+    capacity_series = df[_COL["installed_capacity_mw"]].apply(_to_float)
+    mask = capacity_series.notna() | capacity_series.isna()  # all True
+
+    if tech:
+        tech_lower = {t.lower() for t in tech}
+        mask &= df[_COL["technology_type"]].astype(str).str.lower().isin(tech_lower)
+
+    if status:
+        status_lower = {s.lower() for s in status}
+        mask &= df[_COL["development_status"]].astype(str).str.lower().isin(status_lower)
+
+    if min_capacity_mw is not None:
+        mask &= capacity_series.fillna(-1) >= min_capacity_mw
+    if max_capacity_mw is not None:
+        mask &= capacity_series.fillna(float("inf")) <= max_capacity_mw
+
+    if bbox:
+        try:
+            parts = [float(x) for x in bbox.split(",")]
+        except ValueError as exc:
+            raise ValueError("bbox must be 'minlon,minlat,maxlon,maxlat'") from exc
+        if len(parts) != 4:
+            raise ValueError("bbox must have exactly 4 comma-separated floats")
+        minlon, minlat, maxlon, maxlat = parts
+        xs = df.geometry.x
+        ys = df.geometry.y
+        mask &= (xs >= minlon) & (xs <= maxlon) & (ys >= minlat) & (ys <= maxlat)
+
+    matched = df[mask]
+    total = int(len(matched))
+    page = matched.head(int(limit))
+    results = [_row_to_project(r).model_dump() for _, r in page.iterrows()]
+    return {"count": len(results), "total_matched": total, "results": results}
+
+
 @router.get("/search", response_model=RepdSearchResults)
 def search_repd(
     tech: Optional[list[str]] = Query(
@@ -144,47 +197,16 @@ def search_repd(
     """
 
     store = get_data_store()
-    df = store.repd
-
-    # Pre-parse capacity once for filter + projection.
-    capacity_series = df[_COL["installed_capacity_mw"]].apply(_to_float)
-
-    mask = capacity_series.notna() | capacity_series.isna()  # all True
-
-    if tech:
-        tech_lower = {t.lower() for t in tech}
-        mask &= df[_COL["technology_type"]].astype(str).str.lower().isin(tech_lower)
-
-    if status:
-        status_lower = {s.lower() for s in status}
-        mask &= df[_COL["development_status"]].astype(str).str.lower().isin(status_lower)
-
-    if min_capacity_mw is not None:
-        mask &= capacity_series.fillna(-1) >= min_capacity_mw
-    if max_capacity_mw is not None:
-        mask &= capacity_series.fillna(float("inf")) <= max_capacity_mw
-
-    if bbox:
-        try:
-            parts = [float(x) for x in bbox.split(",")]
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=400,
-                detail="bbox must be 'minlon,minlat,maxlon,maxlat'",
-            ) from exc
-        if len(parts) != 4:
-            raise HTTPException(
-                status_code=400,
-                detail="bbox must have exactly 4 comma-separated floats",
-            )
-        minlon, minlat, maxlon, maxlat = parts
-        # REPD rows are points, so a simple coordinate filter is fastest.
-        xs = df.geometry.x
-        ys = df.geometry.y
-        mask &= (xs >= minlon) & (xs <= maxlon) & (ys >= minlat) & (ys <= maxlat)
-
-    matched = df[mask]
-    total = int(len(matched))
-    page = matched.head(limit)
-    results = [_row_to_project(r) for _, r in page.iterrows()]
-    return RepdSearchResults(count=len(results), total_matched=total, results=results)
+    try:
+        out = _filter_repd(
+            store.repd,
+            tech=tech,
+            status=status,
+            min_capacity_mw=min_capacity_mw,
+            max_capacity_mw=max_capacity_mw,
+            bbox=bbox,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RepdSearchResults(**out)

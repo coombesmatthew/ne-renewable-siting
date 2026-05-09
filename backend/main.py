@@ -1,13 +1,12 @@
 """FastAPI entry point for the NE Renewable Siting backend.
 
-Endpoints provided in this wave (3.1):
+Endpoints:
 
 * ``GET /api/health``
 * ``GET /api/parcel/{parcel_id}``  /  ``GET /api/parcel/at?lng=X&lat=Y``
 * ``GET /api/substation/{name}``  /  ``GET /api/substation/search?q=...``
 * ``GET /api/repd/search`` (filterable)
-
-The ``/api/chat`` Claude-tool-use endpoint is added in wave 3.2.
+* ``POST /api/chat`` (Claude tool-use, SSE-streamed)
 
 Run with: ``uv run uvicorn backend.main:app --reload``
 """
@@ -20,7 +19,7 @@ from fastapi import FastAPI  # pyright: ignore[reportMissingImports]
 from fastapi.middleware.cors import CORSMiddleware  # pyright: ignore[reportMissingImports]
 from fastapi.staticfiles import StaticFiles  # pyright: ignore[reportMissingImports]
 
-from backend.routers import parcel, repd, substation
+from backend.routers import chat, parcel, repd, substation
 
 app = FastAPI(title="NE Renewable Siting API", version="0.1.0")
 
@@ -35,6 +34,7 @@ app.add_middleware(
 app.include_router(parcel.router)
 app.include_router(substation.router)
 app.include_router(repd.router)
+app.include_router(chat.router)
 
 
 @app.get("/api/health", tags=["meta"])
