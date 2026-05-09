@@ -15,7 +15,9 @@ This tool answers both for the North East of England — the region inside North
 
 ## Live demo
 
-Hosted at **`<Railway URL once deployed>`** *(placeholder pending deploy).*
+🌐 **<https://ne-renewable-siting-production.up.railway.app>**
+
+First request after a cold start may take ~30 seconds while the FastAPI worker loads ~230 MB of GeoPackage data into memory; subsequent requests are instant. The chat assistant ("💬" bottom-right) uses Claude Haiku 4.5 with six tools — try "Find me 5 parcels with wind > 8 m/s near a 33 kV substation, no AONB or SSSI".
 
 A screenshot of the main map is at [`docs/screenshots/main.png`](docs/screenshots/main.png) *(placeholder).*
 
