@@ -1186,3 +1186,27 @@ body.filter-open .maplibregl-ctrl-bottom-left {
   border-radius: 3px;
   font-size: 0.92em;
 }
+
+/* About + Methodology buttons in the topbar (right-aligned) */
+.topbar-doc-buttons {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.topbar-doc-btn {
+  background: #fff;
+  border: 1px solid #c8d0d8;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #1a3552;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.topbar-doc-btn:hover {
+  background: #1a5fa7;
+  color: #fff;
+  border-color: #1a5fa7;
+}
