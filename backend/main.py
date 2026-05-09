@@ -6,6 +6,7 @@ Endpoints:
 * ``GET /api/parcel/{parcel_id}``  /  ``GET /api/parcel/at?lng=X&lat=Y``
 * ``GET /api/substation/{name}``  /  ``GET /api/substation/search?q=...``
 * ``GET /api/repd/search`` (filterable)
+* ``GET /api/ownership/{by_title,by_postcode,by_proprietor,nearest}``
 * ``POST /api/chat`` (Claude tool-use, SSE-streamed)
 
 Run with: ``uv run uvicorn backend.main:app --reload``
@@ -23,7 +24,7 @@ from fastapi.staticfiles import StaticFiles  # pyright: ignore[reportMissingImpo
 # Load .env early so ANTHROPIC_API_KEY etc. are available before any router imports.
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from backend.routers import chat, parcel, repd, substation  # noqa: E402
+from backend.routers import chat, ownership, parcel, repd, substation  # noqa: E402
 
 app = FastAPI(title="NE Renewable Siting API", version="0.1.0")
 
@@ -39,6 +40,7 @@ app.add_middleware(
 app.include_router(parcel.router)
 app.include_router(substation.router)
 app.include_router(repd.router)
+app.include_router(ownership.router)
 app.include_router(chat.router)
 
 

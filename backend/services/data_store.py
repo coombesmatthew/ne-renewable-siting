@@ -6,11 +6,14 @@ budget is ~70MB (parcels dominate).
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 import geopandas as gpd
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -31,6 +34,11 @@ class DataStore:
 
     repd: gpd.GeoDataFrame
     """572 Renewable Energy Planning Database records (NE only)."""
+
+    ccod: gpd.GeoDataFrame
+    """120,398 HM Land Registry Commercial and Corporate Ownership records
+    (NE England subset). Excludes individual private owners. Geometry is a
+    jittered postcode centroid (Point)."""
 
     solar_tif_path: Path
     wind_tif_path: Path
@@ -60,15 +68,27 @@ def get_data_store() -> DataStore:
         processed / "npg_substations_points.geojson", engine="pyogrio"
     )
     repd = gpd.read_file(processed / "repd.geojson", engine="pyogrio")
+    ccod = gpd.read_file(processed / "ccod_ne.geojson", engine="pyogrio")
 
     # Build a spatial index on parcels up-front so /api/parcel/at is fast.
     _ = parcels.sindex
+
+    logger.info(
+        "[data_store] loaded parcels=%d substation_catchments=%d "
+        "substation_points=%d repd=%d ccod=%d",
+        len(parcels),
+        len(substation_catchments),
+        len(substation_points),
+        len(repd),
+        len(ccod),
+    )
 
     return DataStore(
         parcels=parcels,
         substation_catchments=substation_catchments,
         substation_points=substation_points,
         repd=repd,
+        ccod=ccod,
         solar_tif_path=raw / "solar_pvout.tif",
         wind_tif_path=raw / "wind_speed_100m.tif",
     )

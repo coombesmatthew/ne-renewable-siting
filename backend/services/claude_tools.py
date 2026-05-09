@@ -3,7 +3,7 @@
 Each tool here is a thin wrapper around the same helpers used by the
 HTTP routers, so the model gets the exact same data the UI does.
 
-The five tools cover the read-only spatial questions an end-user is
+The six tools cover the read-only spatial questions an end-user is
 likely to ask in chat:
 
 * ``get_parcel`` — lookup-by-id or point-in-polygon
@@ -11,6 +11,7 @@ likely to ask in chat:
 * ``search_substations`` — substring search by name
 * ``search_repd`` — filter the renewable energy planning database
 * ``sample_renewables_at`` — point sample of solar/wind rasters
+* ``search_ownership`` — HM Land Registry CCOD ownership lookup
 """
 
 from __future__ import annotations
@@ -170,6 +171,37 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "lat": {"type": "number"},
             },
             "required": ["lng", "lat"],
+        },
+    },
+    {
+        "name": "search_ownership",
+        "description": (
+            "Search HM Land Registry's Commercial and Corporate Ownership Data (CCOD) "
+            "for properties owned by UK-registered companies in NE England. EXCLUDES "
+            "individual private owners — those aren't in the dataset (~70% of agricultural "
+            "land is privately held). Use for queries like 'who owns properties at NE10 1XX', "
+            "'list properties owned by Lightsource Renewable Energy', or 'how many properties "
+            "does Thirteen Housing Group own'. Each result includes proprietor_name_1, "
+            "company_registration_no_1, proprietorship_category_1, property_address, postcode, "
+            "district, tenure, title_number, and lon/lat."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "proprietor_name": {
+                    "type": "string",
+                    "description": "Case-insensitive substring match against proprietor name.",
+                },
+                "postcode": {
+                    "type": "string",
+                    "description": "Exact postcode match (case-insensitive, spaces ignored).",
+                },
+                "title_number": {
+                    "type": "string",
+                    "description": "HM Land Registry title number.",
+                },
+                "limit": {"type": "integer", "default": 20},
+            },
         },
     },
 ]
@@ -337,6 +369,25 @@ def execute_tool(name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
             "wind_speed_100m_ms": sample_raster_at(lng, lat, ds.wind_tif_path),
         }
 
+    if name == "search_ownership":
+        from backend.routers.ownership import _by_postcode, _by_proprietor, _by_title
+
+        df = ds.ccod
+        try:
+            limit = int(tool_input.get("limit", 20))
+        except (TypeError, ValueError):
+            limit = 20
+        if tool_input.get("title_number"):
+            rows = _by_title(df, str(tool_input["title_number"]))[:limit]
+            return {"count": len(rows), "results": [r.model_dump() for r in rows]}
+        if tool_input.get("postcode"):
+            rows = _by_postcode(df, str(tool_input["postcode"]), limit)
+            return {"count": len(rows), "results": [r.model_dump() for r in rows]}
+        if tool_input.get("proprietor_name"):
+            rows = _by_proprietor(df, str(tool_input["proprietor_name"]), limit)
+            return {"count": len(rows), "results": [r.model_dump() for r in rows]}
+        return {"error": "supply at least one of: proprietor_name, postcode, title_number"}
+
     return {"error": f"unknown tool {name}"}
 
 
@@ -357,6 +408,8 @@ def _summarize_tool_result(name: str, result: Any) -> str:
         return f"Found {result.get('count', 0)} substations"
     if name == "search_repd":
         return f"Found {result.get('count', 0)} of {result.get('total_matched', '?')} REPD projects"
+    if name == "search_ownership":
+        return f"Found {result.get('count', 0)} ownership records"
     if name == "get_parcel":
         if isinstance(result, dict) and "parcel_id" in result:
             return f"Parcel {result['parcel_id']}, {result.get('area_ha', '?')} ha"
