@@ -92,7 +92,8 @@ const state = {
     'repd-wind': true,
     'repd-battery': true,
     'repd-hydro': true,
-    'repd-other': true
+    'repd-other': true,
+    'ownership-points': false
   }
 };
 
@@ -181,6 +182,7 @@ function buildStyle(urls) {
       substations: { type: 'vector', url: `pmtiles://${urls.tiles.substations}` },
       built_up_areas: { type: 'vector', url: `pmtiles://${urls.tiles.built_up_areas}` },
       repd: { type: 'vector', url: `pmtiles://${urls.tiles.repd}` },
+      ccod: { type: 'vector', url: `pmtiles://${urls.tiles.ccod}` },
       constraints: { type: 'vector', url: `pmtiles://${urls.tiles.constraints}` },
       ne_polygon: { type: 'vector', url: `pmtiles://${urls.tiles.ne_polygon}` },
       solar_raster: {
@@ -315,6 +317,42 @@ function buildStyle(urls) {
             'interpolate', ['linear'], ['zoom'],
             8, 1.5,
             12, 3,
+            14, 5
+          ],
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 0.5,
+          'circle-opacity': 0.7
+        }
+      },
+
+      // CCOD — corporate property ownership points (HM Land Registry).
+      // ~120K Point features. Off by default (heavy data, opt-in). Coloured by
+      // proprietorship_category_1 so the predominant owner type is legible.
+      // Rendered before substations so substation point markers stay on top.
+      {
+        id: 'ownership-points',
+        type: 'circle',
+        source: 'ccod',
+        'source-layer': 'ccod',
+        layout: { visibility: 'none' },
+        paint: {
+          // Color by proprietorship category — broad buckets.
+          'circle-color': [
+            'match',
+            ['get', 'proprietorship_category_1'],
+            'Limited Company or Public Limited Company', '#4a90e2',
+            'Community Benefit Society (Company)', '#50e3c2',
+            'Community Benefit Society (Corporate Body)', '#50e3c2',
+            'Limited Liability Partnership', '#9013fe',
+            'Local Authority', '#cc1f1f',
+            'County Council', '#cc1f1f',
+            'Corporate Body', '#888888',
+            /* default */ '#aaaaaa'
+          ],
+          'circle-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            8, 1.5,
+            11, 3,
             14, 5
           ],
           'circle-stroke-color': '#ffffff',
@@ -880,6 +918,11 @@ function buildLayerToggles(map) {
     { id: 'wind-raster', label: 'Wind speed raster', swatch: '#80b3d3' }
   ]));
 
+  // OWNERSHIP — HM Land Registry CCOD (corporate owners only).
+  wrap.appendChild(buildGroup('Ownership (CCOD)', [
+    { id: 'ownership-points', label: 'Corporate property owners', swatch: '#4a90e2' }
+  ]));
+
   return wrap;
 }
 
@@ -1187,6 +1230,8 @@ const CLICKABLE_LAYERS = () => [
   ...REPD_LAYER_IDS,
   // Substation point markers
   ...SUBSTATION_POINT_LAYER_IDS,
+  // CCOD ownership points — small specific points, lower priority than REPD/substations
+  'ownership-points',
   // Constraint polygons — small/medium (heritage)
   'constraint-listed-building',
   'constraint-scheduled-monument',
@@ -1262,6 +1307,35 @@ function _renderSubstation(p) {
         value: demhr,
         max: 100,
         color: Number.isFinite(demhr) && demhr > 5 ? 'good' : Number.isFinite(demhr) && demhr > 0 ? 'warn' : 'zero'
+      }
+    ]
+  };
+}
+
+function _renderOwnership(p) {
+  return {
+    title: p.proprietor_name_1 || '(unnamed proprietor)',
+    sections: [
+      {
+        heading: 'Property',
+        rows: [
+          ['Address', p.property_address ?? '-'],
+          ['Postcode', p.postcode ?? '-'],
+          ['District', p.district ?? '-'],
+          ['Tenure', p.tenure ?? '-'],
+          ['Title number', p.title_number ?? '-']
+        ]
+      },
+      {
+        heading: 'Proprietor',
+        rows: [
+          ['Name', p.proprietor_name_1 ?? '-'],
+          ['Type', p.proprietorship_category_1 ?? '-'],
+          ['Company reg', p.company_registration_no_1 ?? '-'],
+          ['HQ address', p.proprietor_address_1 ?? '-'],
+          ['Date added', p.date_proprietor_added ?? '-'],
+          p.additional_proprietors ? ['Additional proprietors', p.additional_proprietors] : null
+        ].filter(Boolean)
       }
     ]
   };
@@ -1394,6 +1468,7 @@ function wireInteractions(map) {
     let panel;
     if (REPD_LAYER_IDS.includes(layerId)) panel = _renderRepd(p);
     else if (SUBSTATION_POINT_LAYER_IDS.includes(layerId)) panel = _renderSubstation(p);
+    else if (layerId === 'ownership-points') panel = _renderOwnership(p);
     else if (layerId === 'parcels-fill') {
       if (state.mode !== 'develop') return; // suppress parcel clicks in Acquire
       panel = _renderParcel(p);
