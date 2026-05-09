@@ -1,0 +1,80 @@
+{
+  "name": "CCOD \u2014 Commercial and Corporate Ownership (NE England)",
+  "source": "HM Land Registry CCOD",
+  "source_url": "https://www.gov.uk/government/publications/hm-land-registry-corporate-and-commercial-ownership-data",
+  "license": "OGL 3.0 (free for non-commercial; \u00a3/yr for commercial use)",
+  "last_updated": "2026-05",
+  "feature_count": 120398,
+  "total_filtered": 202431,
+  "unmatched_postcodes": 82033,
+  "geocode_success_rate": "97.0%",
+  "unique_postcodes": 38690,
+  "unique_postcodes_matched": 37538,
+  "file_size_bytes": 78758424,
+  "proprietorship_category_breakdown": {
+    "Limited Company or Public Limited Company": 89371,
+    "Community Benefit Society (Company)": 6955,
+    "Limited Liability Partnership": 6463,
+    "Corporate Body": 5154,
+    "Local Authority": 3635,
+    "Registered Society (Company)": 3043,
+    "Registered Society (Corporate Body)": 1448,
+    "County Council": 1441,
+    "Community Benefit Society (Corporate Body)": 1246,
+    "Industrial and Provident Society (Company)": 843,
+    "Housing Association/Society (Company)": 206,
+    "Unlimited Company": 168,
+    "Housing Association Community Benefit Society (Company)": 105,
+    "Housing Association Registered Society (Company)": 94,
+    "Co-operative Society (Company)": 60,
+    "Housing Association/Society (Corporate Body)": 60,
+    "Industrial and Provident Society (Corporate Body)": 48,
+    "Housing Association Registered Society (Corporate Body)": 25,
+    "Co-operative Society (Corporate Body)": 20,
+    "Housing Association Community Benefit Society (Corporate Body)": 11,
+    "Housing Association Co-operative Society (Company)": 2
+  },
+  "top_10_proprietors_by_record_count": [
+    {
+      "name": "THIRTEEN HOUSING GROUP LIMITED",
+      "count": 3347
+    },
+    {
+      "name": "CHIME PROPERTIES LIMITED",
+      "count": 3053
+    },
+    {
+      "name": "KARBON HOMES LIMITED",
+      "count": 1851
+    },
+    {
+      "name": "A SHADE GREENER (F8) LLP",
+      "count": 1402
+    },
+    {
+      "name": "NORTH STAR HOUSING GROUP",
+      "count": 1398
+    },
+    {
+      "name": "BERNICIA GROUP",
+      "count": 1158
+    },
+    {
+      "name": "HOME GROUP LIMITED",
+      "count": 1033
+    },
+    {
+      "name": "A SHADE GREENER (F16) LLP",
+      "count": 1000
+    },
+    {
+      "name": "THE COUNTY COUNCIL OF DURHAM",
+      "count": 997
+    },
+    {
+      "name": "LIVIN HOUSING LIMITED",
+      "count": 919
+    }
+  ],
+  "notes": "Excludes individual (private) owners \u2014 only UK-registered companies. Points are jittered \u00b130m in BNG (seed=42) so co-postcoded records don't stack."
+}

@@ -1,14 +1,15 @@
 {
   "base": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev",
   "tiles": {
+    "built_up_areas": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/built_up_areas.pmtiles",
+    "ccod": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/ccod.pmtiles?v=1",
     "constraints": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/constraints.pmtiles",
     "ne_polygon": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/ne_polygon.pmtiles",
     "parcels": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/parcels.pmtiles?v=3",
     "repd": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/repd.pmtiles?v=2",
     "solar": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/solar.pmtiles",
     "substations": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/substations.pmtiles?v=5",
-    "wind": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/wind.pmtiles",
-    "built_up_areas": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/built_up_areas.pmtiles"
+    "wind": "https://pub-fa01f308ec47440aae36ce1671c5a1e3.r2.dev/wind.pmtiles"
   },
   "constraint_layers": [
     "green_belt",
@@ -19,5 +20,5 @@
     "scheduled_monument",
     "flood_zones"
   ],
-  "generated_at": "2026-05-07T16:01:08.178974+00:00"
+  "generated_at": "2026-05-09T12:23:29.925106+00:00"
 }

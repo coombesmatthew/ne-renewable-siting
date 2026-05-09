@@ -75,6 +75,24 @@ _VECTOR_JOBS: list[tuple[str, Path, list[str]]] = [
             "ne_polygon",
         ],
     ),
+    (
+        "ccod",
+        DATA_PROCESSED / "ccod_ne.geojson",
+        [
+            "-Z",
+            "8",
+            "-z",
+            "14",
+            "-l",
+            "ccod",
+            "--cluster-distance=12",
+            "--cluster-densest-as-needed",
+            "-r1",
+            "--no-feature-limit",
+            "--no-tile-size-limit",
+            "--no-tile-stats",
+        ],
+    ),
 ]
 
 # Constraint sub-layers combined into a single multi-layer PMTiles.
