@@ -1,6 +1,16 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Protocol } from 'pmtiles';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+
+function renderMarkdown(text) {
+  return DOMPurify.sanitize(marked.parse(text || '', { breaks: true, gfm: true }));
+}
+
+function isAtBottom(el, threshold = 30) {
+  return el.scrollHeight - (el.scrollTop + el.clientHeight) <= threshold;
+}
 
 // ---------------------------------------------------------------------------
 // PMTiles protocol registration
@@ -1489,7 +1499,8 @@ const API_BASE =
   (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE) ||
   (location.port === '5173' ? 'http://localhost:8000' : '');
 
-async function sendChat(messages, onChunk, onDone) {
+async function sendChat(messages, handlers) {
+  // handlers = { onText, onToolCall, onToolResult, onError, onDone }
   let resp;
   try {
     resp = await fetch(`${API_BASE}/api/chat`, {
@@ -1498,13 +1509,13 @@ async function sendChat(messages, onChunk, onDone) {
       body: JSON.stringify({ messages }),
     });
   } catch (err) {
-    onChunk(`Error: ${err.message || 'network failure'}`);
-    onDone();
+    handlers.onError(`${err.message || 'network failure'}`);
+    handlers.onDone();
     return;
   }
   if (!resp.ok || !resp.body) {
-    onChunk(`Error: ${resp.status}`);
-    onDone();
+    handlers.onError(`${resp.status}`);
+    handlers.onDone();
     return;
   }
   const reader = resp.body.getReader();
@@ -1520,23 +1531,35 @@ async function sendChat(messages, onChunk, onDone) {
       if (!line.startsWith('data: ')) continue;
       const payload = line.slice(6).trim();
       if (payload === '[DONE]') {
-        onDone();
+        handlers.onDone();
         return;
       }
+      let parsed;
       try {
-        const parsed = JSON.parse(payload);
-        if (parsed.text) onChunk(parsed.text);
-        if (parsed.error) {
-          onChunk(`Error: ${parsed.error}`);
-          onDone();
-          return;
-        }
+        parsed = JSON.parse(payload);
       } catch {
-        // ignore malformed JSON chunk
+        continue;
+      }
+      // Backwards compat: legacy {text} payloads with no type
+      if (!parsed.type && parsed.text) parsed.type = 'text';
+      switch (parsed.type) {
+        case 'text':
+          handlers.onText(parsed.text);
+          break;
+        case 'tool_call':
+          handlers.onToolCall(parsed.name);
+          break;
+        case 'tool_result':
+          handlers.onToolResult(parsed.name, parsed.summary);
+          break;
+        case 'error':
+          handlers.onError(parsed.error);
+          handlers.onDone();
+          return;
       }
     }
   }
-  onDone();
+  handlers.onDone();
 }
 
 function wireChat() {
@@ -1582,6 +1605,42 @@ function wireChat() {
     return el;
   }
 
+  function addAssistantMessage() {
+    const el = document.createElement('div');
+    el.className = 'chat-message chat-message-assistant';
+    const trail = document.createElement('div');
+    trail.className = 'tool-trail';
+    el.appendChild(trail);
+    const text = document.createElement('div');
+    text.className = 'text';
+    el.appendChild(text);
+    const wasAtBottom = isAtBottom(messagesEl);
+    messagesEl.appendChild(el);
+    if (wasAtBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+    return { el, trail, text };
+  }
+
+  function addToolChip(trail, name) {
+    const chip = document.createElement('span');
+    chip.className = 'tool-chip pending';
+    chip.dataset.tool = name;
+    chip.innerHTML = `<span class="spinner"></span> ${escapeHtml(name)}…`;
+    trail.appendChild(chip);
+    return chip;
+  }
+
+  function completeToolChip(trail, name, summary) {
+    // Find the most recent pending chip with matching name
+    const chips = trail.querySelectorAll(
+      `.tool-chip.pending[data-tool="${name}"]`
+    );
+    const chip = chips[chips.length - 1];
+    if (!chip) return;
+    chip.classList.remove('pending');
+    chip.classList.add('done');
+    chip.innerHTML = `✓ ${escapeHtml(name)} → ${escapeHtml(summary || '')}`;
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const userText = input.value.trim();
@@ -1590,22 +1649,40 @@ function wireChat() {
     addMessage('user', userText);
     history.push({ role: 'user', content: userText });
 
-    const assistantEl = addMessage('assistant', '');
+    const { trail: trailEl, text: textEl } = addAssistantMessage();
     let assistantText = '';
     sendBtn.disabled = true;
-    await sendChat(
-      history,
-      (chunk) => {
-        assistantText += chunk;
-        assistantEl.textContent = assistantText;
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+    await sendChat(history, {
+      onText: (delta) => {
+        const wasAtBottom = isAtBottom(messagesEl);
+        assistantText += delta || '';
+        textEl.innerHTML = renderMarkdown(assistantText);
+        if (wasAtBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
       },
-      () => {
+      onToolCall: (name) => {
+        const wasAtBottom = isAtBottom(messagesEl);
+        addToolChip(trailEl, name);
+        if (wasAtBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+      },
+      onToolResult: (name, summary) => {
+        const wasAtBottom = isAtBottom(messagesEl);
+        completeToolChip(trailEl, name, summary);
+        if (wasAtBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+      },
+      onError: (errMsg) => {
+        const wasAtBottom = isAtBottom(messagesEl);
+        const errEl = document.createElement('div');
+        errEl.className = 'chat-error';
+        errEl.textContent = `Error: ${errMsg}`;
+        textEl.appendChild(errEl);
+        if (wasAtBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+      },
+      onDone: () => {
         history.push({ role: 'assistant', content: assistantText });
         sendBtn.disabled = false;
         input.focus();
-      }
-    );
+      },
+    });
   });
 }
 
