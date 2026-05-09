@@ -1000,3 +1000,126 @@ body.filter-open .maplibregl-ctrl-bottom-left {
 }
 #parcel-search-status.ok { color: #1f7a1f; }
 #parcel-search-status.warn { color: #b04a00; }
+
+/* ---- Dual-thumb range slider (Capacity in Acquire mode) ---- */
+.dual-range {
+  position: relative;
+  height: 24px;
+  margin-top: 2px;
+}
+.dual-range::before {
+  /* Static gray track */
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  background: #d8dde2;
+  border-radius: 2px;
+}
+.dual-range .fill {
+  /* Highlighted range between the two thumbs */
+  position: absolute;
+  top: 50%; height: 4px;
+  transform: translateY(-50%);
+  background: #1a5fa7;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.dual-range input[type='range'] {
+  position: absolute;
+  left: 0; top: 0;
+  width: 100%; height: 24px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  pointer-events: none; /* container catches hits via the thumbs */
+}
+/* Webkit thumbs */
+.dual-range input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #1a5fa7;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #1a5fa7;
+  cursor: pointer;
+  margin-top: 0;
+}
+/* Firefox thumbs */
+.dual-range input[type='range']::-moz-range-thumb {
+  pointer-events: auto;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #1a5fa7;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #1a5fa7;
+  cursor: pointer;
+}
+/* Hide native track so only the ::before pseudo + .fill paint */
+.dual-range input[type='range']::-webkit-slider-runnable-track {
+  background: transparent;
+  border: none;
+}
+.dual-range input[type='range']::-moz-range-track {
+  background: transparent;
+  border: none;
+}
+
+/* ---- Filter rows: enforce uniform spacing ---- */
+.filter-row {
+  /* Override the earlier min-height — use fixed height for true visual
+     consistency. Voltage select row gets the larger fixed height below. */
+  min-height: 56px;
+  height: auto;
+  padding: 6px 0;
+  border-bottom: 1px solid #ececec;
+}
+.filter-row.has-select {
+  min-height: 90px;
+}
+.filter-section {
+  /* Tighten the gap between sections (was 30px combined). */
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #eef0f3;
+}
+.filter-section h4 {
+  margin: 8px 0 4px;
+}
+
+/* ---- Chat panel: wider + better table rendering ---- */
+#chat-panel {
+  width: 460px;
+}
+@media (max-width: 540px) {
+  #chat-panel { width: 100vw; }
+}
+.chat-message-assistant .text {
+  /* Allow long lines (URLs, parcel ID lists) to wrap. */
+  word-wrap: break-word;
+}
+.chat-message-assistant .text table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin: 4px 0 8px;
+}
+.chat-message-assistant .text thead th {
+  background: #f0f0f5;
+  font-weight: 600;
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid #d0d0d8;
+  white-space: nowrap;
+}
+.chat-message-assistant .text tbody td {
+  padding: 3px 8px;
+  border-bottom: 1px solid #ececec;
+  white-space: nowrap;
+  vertical-align: top;
+}

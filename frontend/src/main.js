@@ -682,8 +682,10 @@ function buildAcquireFilters(map) {
     frag.appendChild(sec);
   }
 
-  // Capacity range (dual slider)
+  // Capacity range (single dual-thumb slider — one bar, two thumbs, the
+  // active range painted between them).
   {
+    const MAX_MW = 500;
     const sec = section('Capacity (MWelec)');
     const wrapper = document.createElement('div');
     wrapper.className = 'slider-row';
@@ -693,24 +695,28 @@ function buildAcquireFilters(map) {
     wrapper.appendChild(labelEl);
 
     const dualWrap = document.createElement('div');
-    dualWrap.className = 'dual-slider';
+    dualWrap.className = 'dual-range';
 
-    const minSlider = document.createElement('input');
-    minSlider.type = 'range';
-    minSlider.min = '0';
-    minSlider.max = '500';
-    minSlider.step = '5';
-    minSlider.value = String(cfg.capacityMin);
+    const fill = document.createElement('div');
+    fill.className = 'fill';
+    dualWrap.appendChild(fill);
 
-    const maxSlider = document.createElement('input');
-    maxSlider.type = 'range';
-    maxSlider.min = '0';
-    maxSlider.max = '500';
-    maxSlider.step = '5';
-    maxSlider.value = String(cfg.capacityMax);
+    const mkSlider = (val) => {
+      const i = document.createElement('input');
+      i.type = 'range';
+      i.min = '0';
+      i.max = String(MAX_MW);
+      i.step = '5';
+      i.value = String(val);
+      return i;
+    };
+    const minSlider = mkSlider(cfg.capacityMin);
+    const maxSlider = mkSlider(cfg.capacityMax);
 
-    const updateLabel = () => {
+    const updateUi = () => {
       document.getElementById('cap-value').textContent = `${cfg.capacityMin}–${cfg.capacityMax} MW`;
+      fill.style.left = `${(cfg.capacityMin / MAX_MW) * 100}%`;
+      fill.style.right = `${100 - (cfg.capacityMax / MAX_MW) * 100}%`;
     };
 
     minSlider.addEventListener('input', () => {
@@ -718,7 +724,7 @@ function buildAcquireFilters(map) {
       if (v > cfg.capacityMax) v = cfg.capacityMax;
       cfg.capacityMin = v;
       minSlider.value = String(v);
-      updateLabel();
+      updateUi();
       scheduleAcquireUpdate(map);
     });
     maxSlider.addEventListener('input', () => {
@@ -726,7 +732,7 @@ function buildAcquireFilters(map) {
       if (v < cfg.capacityMin) v = cfg.capacityMin;
       cfg.capacityMax = v;
       maxSlider.value = String(v);
-      updateLabel();
+      updateUi();
       scheduleAcquireUpdate(map);
     });
 
@@ -735,6 +741,8 @@ function buildAcquireFilters(map) {
     wrapper.appendChild(dualWrap);
     sec.appendChild(wrapper);
     frag.appendChild(sec);
+    // Initial paint of the fill bar.
+    setTimeout(updateUi, 0);
   }
 
   return frag;
